@@ -50,7 +50,7 @@ public:
     }
 
     int ReadButton(int floor, ButtonType b){
-        if(floor < minFloor  ||  floor >= maxFloor){
+        if(floor < minFloor  ||  floor > maxFloor){
             assert(0, "ReadButton floor is out of bounds: floor = " ~ floor.to!string);
         }
         if (b == ButtonType.DOWN  &&  floor == 0){ return -1; }
@@ -71,7 +71,7 @@ public:
     }
 
     void SetLight(string onoff)(int floor, Light l){
-        if(floor < minFloor  ||  floor >= maxFloor){
+        if(floor < minFloor  ||  floor > maxFloor){
             assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
         }
         if (l == Light.UP || l == Light.DOWN || l == Light.COMMAND){
@@ -107,9 +107,9 @@ public:
                 }
                 break;
             case Light.DOOR_OPEN:
-                if (onoff == "on"){
+                static if (onoff == "on"){
                     doorLight = true;
-                } else if (onoff == "off"){
+                } else static if (onoff == "off"){
                     doorLight = false;
                 } else {
                     static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
@@ -379,13 +379,16 @@ void thr_controlPanelInput(){
 
     writeln("elevator control started");
 
-
-    import core.sys.windows.windows;
-    SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+    version(windows){
+        import core.sys.windows.windows;
+        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+    }
     while(1){
         foreach(ubyte[] buf; stdin.byChunk(1)){
             ownerTid.send(buf.idup);
-            SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+            version(windows){
+                SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+            }
         }
     }
 }

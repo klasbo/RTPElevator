@@ -1,4 +1,4 @@
-module  elevator.t_timerEvent2;
+module  util.timerEvent;
 
 
 import  core.thread,
@@ -21,9 +21,10 @@ enum {
 
 void timerEvent_thr(){
     scope(failure){
-        writeln("He's dead, jim.");
+        writeln(__FUNCTION__, " died");
     }
 
+try{
 
 
     struct Event {
@@ -134,4 +135,6 @@ void timerEvent_thr(){
             timeUntilNextEvent = Duration.max;
         }
     }
+}
+catch(Throwable t){ t.writeln; }
 }

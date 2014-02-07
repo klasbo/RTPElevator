@@ -1,7 +1,7 @@
 module  elevator_driver.comedi_elevator;
 
-import  channels,
-        io_di;
+import  elevator_driver.channels,
+        elevator_driver.io_di;
 public import elevator_driver.i_elevator;
 import  std.conv,
         std.string;
@@ -52,7 +52,7 @@ class ComediElevator : Elevator
          *   If a floor is out of bounds, it will read the button at the closest _floor<br><br>
          */
         int ReadButton(int floor, ButtonType b){
-            if(floor < ComediElevator.minFloor  ||  floor >= ComediElevator.maxFloor){
+            if(floor < ComediElevator.minFloor  ||  floor > ComediElevator.maxFloor){
                 assert(0, "ReadButton floor is out of bounds: floor = " ~ floor.to!string);
             }
             if (b == ButtonType.DOWN  &&  floor == ComediElevator.minFloor){ return -1; }
@@ -97,7 +97,7 @@ class ComediElevator : Elevator
          *   Throws assertError if an invalid Light type is given, or if a _floor is out of bounds<br>
          */
         void SetLight(string onoff)(int floor, Light l){
-            if(floor < ComediElevator.minFloor  ||  floor >= ComediElevator.maxFloor){
+            if(floor < ComediElevator.minFloor  ||  floor > ComediElevator.maxFloor){
                 assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
             }
             if (l == Light.UP || l == Light.DOWN || l == Light.COMMAND){
@@ -117,7 +117,7 @@ class ComediElevator : Elevator
          *   Since this light cannot be set on or off, it does not have the onoff template argument
          */
         void SetLight(int floor, Light l){
-            if(floor < ComediElevator.minFloor  ||  floor >= ComediElevator.maxFloor){
+            if(floor < ComediElevator.minFloor  ||  floor > ComediElevator.maxFloor){
                 assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
             }
             if (l == Light.FLOOR_INDICATOR){     // So this thing is ugly. I don't know why these lights are encoded binary-esque.

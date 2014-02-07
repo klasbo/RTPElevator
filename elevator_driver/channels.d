@@ -2,6 +2,8 @@
 //
 // 2006, Martin Korsgaard
 // Modified for D: 2013, klasbo
+module elevator_driver.channels;
+
 
 //in port 4
 const int PORT4          = 3;

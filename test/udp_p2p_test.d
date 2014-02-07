@@ -1,8 +1,10 @@
-
-import  network.udp_p2p;
+module  test.udp_p2p_test;
 
 import  std.stdio,
         std.concurrency;
+
+import  network.udp_p2p;
+
         
 void udp_p2p_test(){    
     auto udp_p2p_tid = udp_p2p_start;

@@ -1,6 +1,11 @@
 module  elevator_driver.i_elevator;
 
 
+public import   types:ButtonType;
+public import   types:Light;
+public import   types:MotorDirection;
+
+
 interface Elevator {
 public:
     int ReadButton(int floor, ButtonType b);
@@ -17,23 +22,4 @@ public:
 }
 
 
-enum ButtonType : int {
-    UP=0,
-    DOWN=1,
-    COMMAND=2
-}
 
-enum Light : int {
-    UP=0,
-    DOWN=1,
-    COMMAND=2,
-    FLOOR_INDICATOR=3,
-    STOP=4,
-    DOOR_OPEN=5
-}
-
-enum MotorDirection {
-    UP,
-    DOWN,
-    STOP
-}

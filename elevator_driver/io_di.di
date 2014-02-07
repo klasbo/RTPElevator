@@ -10,6 +10,8 @@ C code dependencies:
 2013, klasbo
 +/
 
+module elevator_driver.io_di;
+
 version(linux){
     extern(C):
         int     io_init();
