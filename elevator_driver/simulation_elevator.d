@@ -1,43 +1,36 @@
 module elevator_driver.simulation_elevator;
 
 
-import  std.algorithm,
+import  core.thread,
+        std.algorithm,
         std.concurrency,
-        std.stdio,
-        std.string,
         std.conv,
+        std.file,
         std.process,
-        std.c.stdlib,
-        core.thread;
+        std.socket,
+        std.stdio,
+        std.string;
 
 public import  elevator_driver.i_elevator;
 
-
-private {
-    // Elevator state
-    shared int              currFloor;
-    shared int              prevFloor;
-    shared int              nextFloor;
-    shared MotorDirection   currDir;
-    shared MotorDirection   prevDir;
-
-    // Buttons & switches
-    shared bool[][]         buttons;
-    shared bool             stopBtn;
-    shared bool             obstrSwch;
-
-    // Lights
-    shared bool[][]         lights;
-    shared int              flrIndLight;
-    shared bool             stpBtnLight;
-    shared bool             doorLight;
-
-    // misc
-    shared int              printCount;
+static this(){
+    travelTime                  = 1500.msecs;
+    doorOpenTime                = 650.msecs;
+    btnDepressedTime            = 200.msecs;
 }
 
+/**
+Visual representation of the elevator appears in a second window.
+    Uses UDP port 40000 to communicate between the two windows.
+    
+Use QWE, SDF, ZXCV to control Up, Down, Command buttons.
+Use T for Stop button, G for obstruction switch.
 
+Windows: Keys react instantly.
+Linux: Press key followed by Enter.
 
+Linux: Spawns the window using mate-terminal.
+*/
 class SimulationElevator : Elevator
 {
 public:
@@ -85,6 +78,7 @@ public:
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
+        simulationLoop_thread.send(stateUpdated());
     }
     
     void SetLight(int floor, Light l){
@@ -93,6 +87,7 @@ public:
         } else {
             assert(0, "Floor-dependent light must be set on or off");
         }
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void SetLight(string onoff)(Light l){
@@ -118,6 +113,7 @@ public:
             default:
                 assert(0, "Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
         }
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void ResetLights(){
@@ -127,6 +123,8 @@ public:
         doorLight   = false;
         stpBtnLight = false;
         flrIndLight = 0;
+        
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void SetMotorDirection(MotorDirection m){
@@ -138,14 +136,46 @@ public:
     @property int minFloor() const { return 0; }
     @property int maxFloor() const { return 3; }
 
+
 private:
     Tid simulationLoop_thread;
 }
 
+
+
 private {
+    // Elevator state
+    shared int              currFloor;
+    shared int              prevFloor;
+    shared int              nextFloor;
+    shared MotorDirection   currDir;
+    shared MotorDirection   prevDir;
+
+    // Buttons & switches
+    shared bool[][]         buttons;
+    shared bool             stopBtn;
+    shared bool             obstrSwch;
+
+    // Lights
+    shared bool[][]         lights;
+    shared int              flrIndLight;
+    shared bool             stpBtnLight;
+    shared bool             doorLight;
+
+    // Printing
+    shared int              printCount;
+    InternetAddress         addr;
+    Socket                  sock;
+    
+    // Settings
+    Duration                travelTime;
+    Duration                doorOpenTime;
+    Duration                btnDepressedTime;
+
+    
+    
 
 void thr_simulationLoop(){
-try {
     scope(exit){ writeln(__FUNCTION__, " died"); }
 
      /+
@@ -164,7 +194,7 @@ try {
 
     // --- IMPORTS --- //
 
-    import util.timerEvent;
+    import util.timer_event;
 
 
 
@@ -173,13 +203,8 @@ try {
 
     Tid         timerEvent_thread;
     Tid         controlPanelInput_thread;
-
-    Duration    travelTime;
-    Duration    doorOpenTime;
-    Duration    btnDepressedTime;
-
-
-
+    
+    
 
     // --- FUNCTIONS --- //
 
@@ -299,25 +324,33 @@ try {
         }
     }
 
-
-
-
+    
+    
 
     // --- INIT --- //
 
 
     timerEvent_thread           = spawn( &timerEvent_thr );
     controlPanelInput_thread    = spawn( &thr_controlPanelInput );
-
-
-    travelTime                  = 3.seconds;
-    doorOpenTime                = 2.seconds;
-    btnDepressedTime            = 200.msecs;
-
-
+    addr                        = new InternetAddress("localhost", 40000);
+    sock                        = new UdpSocket();
+    
+    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+    
+    // Create and spawn second window
+    string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];
+    std.file.write(path~"secondWindow1.d", secondWindowProgram);
+    version(Windows){
+        std.process.spawnShell(("start \"\" rdmd -w -g \"" ~ path ~ "secondWindow1.d\""));
+    } else version(linux){
+        std.process.spawnShell(("mate-terminal -x rdmd -w -g \"" ~ path ~ "secondWindow1.d\""));
+    }
+    Thread.sleep(1.seconds);
+    std.file.remove(path~"secondWindow1.d");
+    
 
     // --- LOOP --- //
-    printState(false);
+    printState;
     while(1){
         receive(
             (MotorDirection m){
@@ -364,14 +397,12 @@ try {
             },
             (immutable(ubyte)[] b){
                 handleStdinEvent(b[0].to!char);
+            },
+            (stateUpdated su){
             }
         );
-        printState(true);
+        printState;
     }
-} catch(Throwable t){
-    writeln(t);
-    abort();
-}
 }
 
 void thr_controlPanelInput(){
@@ -379,27 +410,21 @@ void thr_controlPanelInput(){
 
     writeln("elevator control started");
 
-    version(windows){
+    version(Windows){
         import core.sys.windows.windows;
         SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
     }
     while(1){
         foreach(ubyte[] buf; stdin.byChunk(1)){
             ownerTid.send(buf.idup);
-            version(windows){
+            version(Windows){
                 SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
             }
         }
     }
 }
 
-void printState(bool clearScreen){
-    version(Windows){
-        import std.c.process;
-        if(clearScreen){
-            system("CLS");
-        }
-    }
+void printState(){
 
     string fmt = "%-(%s\n%)";
 
@@ -470,11 +495,8 @@ void printState(bool clearScreen){
     auto c = printCount++.to!(char[]);
     bg[4][41-c.length..41] = c[0..$];
 
-
-    //writefln(fmt, newInfo);
-    writefln(fmt, bg);
-
-
+    sock.sendTo(bg.reduce!((a, b) => a ~ "\n" ~ b), addr);
+    
 }
 
 
@@ -483,5 +505,42 @@ class ElevatorCrash : Exception {
         super(msg);
     }
 }
+
+struct stateUpdated {}
+
+
+
+
+
+auto secondWindowProgram = 
+q"EOS
+import  std.stdio,
+        std.socket,
+        std.c.process;
+        
+void main(){    
+    scope(exit) writeln(__FUNCTION__, " died");
+
+    auto    addr    = new InternetAddress("localhost", 40000);
+    auto    sock    = new UdpSocket();
+    
+    ubyte[2048]     buf;    
+    
+    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+    sock.bind(addr);
+
+    while(sock.receive(buf) > 0){
+        version(Windows){
+            system("CLS");
+        }
+        version(linux){
+            system("clear");
+        }
+        writeln(cast(string)buf);
+        buf.clear;
+    }
+}
+EOS";
+
 
 }

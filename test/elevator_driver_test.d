@@ -11,7 +11,7 @@ import  elevator_driver,
 
 void elevator_driver_test(){
 
-    auto elevator = new ComediElevator;
+    auto elevator = new SimulationElevator;
 
     auto elevatorDriver = elevator_events_start(elevator);
 
@@ -36,18 +36,18 @@ void elevator_driver_test(){
                     : (elevator.SetLight!"off"(Light.STOP), false);
                 elevator.SetMotorDirection(MotorDirection.STOP);
             },
-            (obstrSwitchEvent ose){
-                writeln("The obstruction is " ~ (ose.active ? "active" : "inactive"));
+            (obstrSwitchEvent obstr){
+                writeln("The obstruction is " ~ (obstr ? "active" : "inactive"));
                 doorOpenLight =! doorOpenLight
                     ? (elevator.SetLight!"on"(Light.DOOR_OPEN), true)
                     : (elevator.SetLight!"off"(Light.DOOR_OPEN), false);
             },
-            (newFloorEvent nfe){
-                writeln("Arrived at floor ", nfe.floor);
-                if(nfe.floor == elevator.maxFloor){
+            (newFloorEvent newFloor){
+                writeln("Arrived at floor ", newFloor);
+                if(newFloor == elevator.maxFloor){
                     elevator.SetMotorDirection(MotorDirection.DOWN);
                 }
-                if(nfe.floor == elevator.minFloor){
+                if(newFloor == elevator.minFloor){
                     elevator.SetMotorDirection(MotorDirection.UP);
                 }
             }

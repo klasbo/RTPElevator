@@ -274,7 +274,7 @@ enum ElevatorOption {
 
 
 version(Windows){
-    pragma(msg, "    Compiling with empty io_xxx() functions...");
+    pragma(msg, "    Compiling with empty io_X() functions...");
 
     int     io_init(){ return 0; }
     void    io_set_bit(int channel){ return; }

@@ -2,8 +2,9 @@ module  types;
 
 import  std.typecons;
 
-
 struct initDone {}
+
+
 
 struct btnPressEvent {
     ButtonType  btn;
@@ -12,13 +13,16 @@ struct btnPressEvent {
 struct stopBtnEvent {}
 struct obstrSwitchEvent {
     bool        active;
+    alias active this;
 }
 struct newFloorEvent {
     int         floor;
     invariant() {
         assert(floor >= 0, "newFloorEvent floor must be positive");
     }
+    alias floor this;
 }
+
 
 
 enum ButtonType : int {

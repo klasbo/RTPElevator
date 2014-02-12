@@ -1,4 +1,4 @@
-module  util.timerEvent;
+module  util.timer_event;
 
 
 import  core.thread,

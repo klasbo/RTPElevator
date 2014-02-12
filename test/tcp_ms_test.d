@@ -16,10 +16,14 @@ void tcp_ms_test(){
     while(true){
         receive(
             (Tid t, string s){
-                writeln("\n    tcp_ms_test received message:\n     ", s, "\n");
+                if(t == tcp_ms_tid){
+                    writeln("\n    tcp_ms_test received message:\n     ", s, "\n");
+                }
             },
             (Tid t, peerListUpdate plu){
-                writeln("\n    tcp_ms_test received peer list:\n     ", plu.peers, "\n");
+                if(t == tcp_ms_tid){
+                    writeln("\n    tcp_ms_test received peer list:\n     ", plu, "\n");
+                }
             },
             (spam s){
                 tcp_ms_tid.send(s.msg);
