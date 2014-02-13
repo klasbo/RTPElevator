@@ -42,8 +42,8 @@ string spawn3way(string[] threads, bool shareThreads, bool linked = false){
 
     foreach(i, thread; threads){
         string[] spawnInfo  = thread.split(",");
-        int numArgs = spawnInfo.length;
-        int j;
+        auto numArgs = spawnInfo.length;
+        typeof(numArgs) j;
 
         spawnInfo[j] = spawnInfo[j].strip;
         if(spawnInfo[j].skipOver("thread:")){
@@ -114,12 +114,12 @@ string spawn3way(string[] threads, bool shareThreads, bool linked = false){
 */
 string reciprocate3way(string stuff){
     string[] spawnInfo = stuff.split(",");
-    int numArgs = spawnInfo.length;
+    auto numArgs = spawnInfo.length;
     string[][] threads = new string[][](1);
     string[][] reply = new string[][](1);
     string[][] await = new string[][](1);
     string[] meta;
-    int j;
+    typeof(numArgs) j;
 
     foreach(i; 0..1){
         mixin(parseArg("threads"));

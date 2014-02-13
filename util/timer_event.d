@@ -43,20 +43,18 @@ try{
 
 
     Event[]     events;
-    Duration    timeUntilNextEvent  = Duration.max;
+    Duration    timeUntilNextEvent  = 1.hours;
     Duration    eventMinimumPeriod  = 5.msecs;
 
 
     void AddEvent(Tid owner, string eventName, SysTime timeOfEvent, Duration period, int type){
         foreach(event; events){
             if(owner == event.owner  &&  eventName == event.name){
-                //assert(false, "Failure to add new event: Event \"" ~ eventName ~ "\" already exists for this owner");
                 debug writeln("Failure to add new event: Event \"" ~ eventName ~ "\" already exists for this owner");
                 return;
             }
         }
         if(type == periodic  &&  period < eventMinimumPeriod){
-            //assert(false, "Failure to add new event: Event period is too fast");
             debug writeln("Failure to add new event: Event period is too fast");
             return;
         }
@@ -75,18 +73,13 @@ try{
             // in [time] timeunits (implicit oneshot)
            (Tid owner, string eventName, Duration time){
                AddEvent(owner, eventName, Clock.currTime + time, 0.msecs, oneshot);
-               //events ~= Event(t, eventName, Clock.currTime + time, oneshot, 0.msecs);
            },
            // in [time] timeunits, with type
            (Tid owner, string eventName, Duration time, int type){
                AddEvent(owner, eventName, Clock.currTime + time, time, type);
-               //events ~= Event(t, eventName, Clock.currTime + time, type, time);
            },
            // at [time] (implicit oneshot)
            (Tid owner, string eventName, SysTime time){
-//               if(Clock.currTime < time){
-//                    events ~= Event(t, eventName, time, oneshot, 0.msecs);
-//               }
                 AddEvent(owner, eventName, time, 0.msecs, oneshot);
            },
            // cancel event
@@ -113,10 +106,10 @@ try{
 
                 event.owner . send(thisTid, event.name);
 
-                if(event.period == 0.msecs){
-                    events = events.remove(idx);
-                } else if(event.period >= eventMinimumPeriod){
+                if(event.period >= eventMinimumPeriod){
                     event.time += event.period;
+                } else {
+                    events = events.remove(idx);
                 }
                 goto iter;  // Do not foreach over a list that is being modified
             }
@@ -132,7 +125,7 @@ try{
                 timeUntilNextEvent = 0.msecs;
             }
         } else {
-            timeUntilNextEvent = Duration.max;
+            timeUntilNextEvent = 1.hours;
         }
     }
 }
