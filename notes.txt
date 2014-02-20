@@ -1,0 +1,74 @@
+// 0 = no order
+ubyte[][] orders_external
+struct order_msg {
+    // order description
+    ubyte       assignedID
+    int         floor
+    ButtonType  btn
+    // meta
+    ubyte       origin
+    msgType_e   msgType
+}
+enum msgType_e {
+    newOrder, completedOrder, ackOrder
+}
+
+
+receive (order_msg o)
+    if newOrder
+        add to orders_external
+        if assignedID == 0
+            reply (o.origin) (completionTime)
+        if assignedID != 0
+            reply (o.origin) (ackOrder)
+    if completedOrder
+        remove from orders_external
+        light off
+    if ackOrder && o.origin == thisID
+        send light On
+        
+        
+// --- FLOW --- //
+On button press:
+    Find best suited, send newOrder
+    Expect ackOrder from all (RT demand)
+        Else: send newOrder with self
+        Shortcircuit: Do not send over network to self
+    Send light On
+    
+On completion:
+    Send completedOrder
+    
+On peer list change:
+    If thisID == highest:
+        Redistribute orders from missing peer
+        (Send buttonPress(s) to self)
+        
+Random times:
+    Check that no orders use disconnected peers:
+        Redistribute (send buttonPress to self)
+
+        
+// --- EVENTS --- //
+button press
+new floor
+
+order msg
+ack timeout
+order integrity check (random interval)
+
+peer list update
+state update
+state restore request
+
+door close
+
+
+
+
+
+
+
+
+
+
