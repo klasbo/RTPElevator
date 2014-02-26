@@ -1,5 +1,25 @@
+// --- GUIDELINES --- //
+
+All data goes in one place
+    And all logic goes in the same place
+-> No concurrent access
+-> No inconsistent views
+-> Define data types and functions privately
+
+All side effects rely on filtered views
+->  No failures when views are restricted enough
+->  100% test coverage possible!
+
+Struct invariants introduce state
+.. So do data integrity checks
+    -> Do not create side effects from integrity checks
+    -> Regenerating data is not a side effect
+
+
+// --- DATA STRUCTURE --- //
+
 // 0 = no order
-ubyte[][] orders_external
+ext_btn[][] orders_external
 struct order_msg {
     // order description
     ubyte       assignedID
@@ -10,45 +30,66 @@ struct order_msg {
     msgType_e   msgType
 }
 enum msgType_e {
-    newOrder, completedOrder, ackOrder
+    newOrder, ackOrder, confirmedOrder, completedOrder, 
 }
 
+Per external button:
+    assigned ID
+    ubyte[] confirmedPeers
 
-receive (order_msg o)
-    if newOrder
-        add to orders_external
-        if assignedID == 0
-            reply (o.origin) (completionTime)
-        if assignedID != 0
-            reply (o.origin) (ackOrder)
-    if completedOrder
-        remove from orders_external
-        light off
-    if ackOrder && o.origin == thisID
-        send light On
-        
-        
+Per elevator:
+    currFloor
+    prevFloor (or direction?)
+    internal orders
+    
+ubyte[] alivePeers
+
+
+// --- BEST FIT ALGORITHM --- //
+
+
 // --- FLOW --- //
 On button press:
-    Find best suited, send newOrder
-    Expect ackOrder from all (RT demand)
-        Else: send newOrder with self
+    Find best suited, send newOrder with assignedID
+    Expect ackOrder from all (send timeout to timerEvent) (RT demand)
+            (Reliability goes down with more participants!)
+        Else: send newOrder with self as assignedID
         Shortcircuit: Do not send over network to self
-    Send light On
-    
+    Send confirmedOrder (light on)
+
+    bestSuited  ->  (this is not bestSuited)
+                <-  ack
+    confirmed   ->
+
+    bestSuited  ->  (this is bestSuited)
+                <-  ack
+    confirmed   ->
+                <-  completedOrder (light off)
+
+
 On completion:
     Send completedOrder
-    
+
 On peer list change:
     If thisID == highest:
         Redistribute orders from missing peer
         (Send buttonPress(s) to self)
-        
+
 Random times:
     Check that no orders use disconnected peers:
         Redistribute (send buttonPress to self)
 
-        
+receive (order_msg o)
+    if newOrder
+        add to orders_external
+        reply (o.origin) (ackOrder)
+    if completedOrder
+        remove from orders_external
+        set local light off
+    if ackOrder  &&  o.origin == thisID
+        send confirmedOrder (light on)
+
+
 // --- EVENTS --- //
 button press
 new floor
@@ -56,6 +97,7 @@ new floor
 order msg
 ack timeout
 order integrity check (random interval)
+light on
 
 peer list update
 state update
@@ -64,7 +106,40 @@ state restore request
 door close
 
 
+// --- MOUDULES --- //
+Main
+    Init
+    Event dispatch
+        Elevator driver
+        Network
+        Timer event driver
+        Local storage writer
+        
+Pass dependencies from above
 
+
+// --- INIT --- //
+If peers:
+    Get remote storage (state restore request)
+Otherwise:
+    Get local storage
+
+(No more init required? Any hidden state/dependencies?)
+
+
+
+// --- MP --- //
+All messages need to be structs with constructors
+
+Inject receive() :
+    (Logfile name = thread name)
+    assert all receive types T... are structs
+    on receive: append (currTime, T) to log
+
+Inject replay :
+    Read logfile contents
+    spawn new thread (message generator)
+    Use time diff between messages, parse with constructors.
 
 
 
