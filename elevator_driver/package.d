@@ -16,11 +16,29 @@ import  types;
 
 
 
+public {
+    Tid elevator_events_start(Elevator elevator){
+        Tid t = spawnLinked( &elevator_eventsGenerator, cast(shared)elevator );
+        receiveOnly!initDone;
+        return t;
+    }
 
-Tid elevator_events_start(Elevator elevator){
-    Tid t = spawnLinked( &elevator_eventsGenerator, cast(shared)elevator );
-    receiveOnly!initDone;
-    return t;
+    struct btnPressEvent {
+        ButtonType  btn;
+        int         floor;
+    }
+    struct stopBtnEvent {}
+    struct obstrSwitchEvent {
+        bool        active;
+        alias active this;
+    }
+    struct newFloorEvent {
+        int         floor;
+        invariant() {
+            assert(floor >= 0, "newFloorEvent floor must be positive");
+        }
+        alias floor this;
+    }
 }
 
 private void elevator_eventsGenerator(shared Elevator e){
@@ -69,8 +87,6 @@ private void elevator_eventsGenerator(shared Elevator e){
             ownerTid.send(newFloorEvent(currFloor));
         }
     }
-
-
 }
 
 

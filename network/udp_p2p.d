@@ -190,7 +190,7 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
         sock.bind(addr);
 
-        import std.range : strip;
+        import std.algorithm : strip;
         //ownerTid.send(initDone());
         mixin(reciprocate3way(""));
         while(sock.receiveFrom(buf, remoteAddr) > 0){

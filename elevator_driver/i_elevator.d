@@ -1,9 +1,26 @@
 module  elevator_driver.i_elevator;
 
 
-public import   types:ButtonType;
-public import   types:Light;
-public import   types:MotorDirection;
+enum ButtonType : int {
+    UP=0,
+    DOWN=1,
+    COMMAND=2
+}
+
+enum Light : int {
+    UP=0,
+    DOWN=1,
+    COMMAND=2,
+    FLOOR_INDICATOR,
+    STOP,
+    DOOR_OPEN
+}
+
+enum MotorDirection {
+    UP,
+    DOWN,
+    STOP
+}
 
 
 interface Elevator {
