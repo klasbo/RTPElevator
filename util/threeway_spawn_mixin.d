@@ -31,7 +31,7 @@ Signal ys (and Tids)
     If linked is true: use spawnLinked() instead of spawn()
 */
 string spawn3way(string[] threads, bool shareThreads, bool linked = false){
-    int             numThreads      = threads.length;
+    auto            numThreads      = threads.length;
     string[]        threadsByName   = new string[](numThreads);
     string[]        threadsByFunc   = new string[](numThreads);
     string[][]      params          = new string[][](numThreads);
