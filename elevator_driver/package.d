@@ -17,9 +17,9 @@ import  types;
 
 
 public {
-    Tid elevator_events_start(Elevator elevator){
-        Tid t = spawnLinked( &elevator_eventsGenerator, cast(shared)elevator );
-        receiveOnly!initDone;
+    Tid elevatorEvents_start(Elevator elevator){
+        Tid t = spawnLinked( &elevatorEventsGenerator, cast(shared)elevator );
+        receive((initDone id){});
         return t;
     }
 
@@ -41,7 +41,7 @@ public {
     }
 }
 
-private void elevator_eventsGenerator(shared Elevator e){
+private void elevatorEventsGenerator(shared Elevator e){
     Elevator elev = cast(Elevator)e;
 
     auto buttonsArr = new bool[][](3,4);

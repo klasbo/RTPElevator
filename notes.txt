@@ -88,6 +88,8 @@ receive (order_msg o)
         set local light off
     if ackOrder  &&  o.origin == thisID
         send confirmedOrder (light on)
+    if confirmedOrder
+        set light on
 
 
 // --- EVENTS --- //
@@ -97,7 +99,6 @@ new floor
 order msg
 ack timeout
 order integrity check (random interval)
-light on
 
 peer list update
 state update
@@ -109,7 +110,7 @@ door close
 // --- MOUDULES --- //
 Main
     Init
-    Event dispatch
+    Event loop
         Elevator driver
         Network
         Timer event driver

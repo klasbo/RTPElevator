@@ -1,16 +1,24 @@
 module  test.udp_p2p_test;
 
 import  std.stdio,
-        std.concurrency;
+        std.concurrency,
+        core.thread;
 
 import  network.udp_p2p;
 
         
-void udp_p2p_test(){    
-    auto udp_p2p_tid = udp_p2p_start;
-    
+void udp_p2p_test(){
+    auto receiver = spawn( &recv_thr );
+
+    auto udp_p2p_tid = udp_p2p_start(receiver);    
     
     udp_p2p_tid.send("hello");
+    
+    while(true){ Thread.sleep( Duration.max); }
+
+}
+
+void recv_thr(){
     while(true){
         receive(
             (Tid t, string s){

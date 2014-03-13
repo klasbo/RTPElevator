@@ -25,9 +25,9 @@ string  broadcastIP;
 ubyte   thisPeerID;
 
 public {
-    Tid tcp_ms_start(){
-        Tid t = spawn( &tcp_ms_hub );
-        receiveOnly!(initDone);
+    Tid tcp_ms_start(Tid receiver = thisTid){
+        Tid t = spawn( &tcp_ms_hub, receiver );
+        receive((initDone id){});
         return t;
     }
     
@@ -48,7 +48,7 @@ private {
 
 
 
-    void tcp_ms_hub(){
+    void tcp_ms_hub(Tid receiver){
         debug(1) writeln(__FUNCTION__, " started");
         
         Socket[ubyte]   socketMap;
@@ -91,7 +91,7 @@ private {
                 // Forward it to the owner of the network module instance
                 (Tid t, msgFromNetwork mfn){
                     if(mfn.msg.length){
-                        ownerTid.send(thisTid, mfn.msg);
+                        receiver.send(thisTid, mfn.msg);
                     }
                 },
                 
@@ -151,7 +151,7 @@ private {
 
                     printConnInfo();
                     
-                    ownerTid.send(thisTid, plu);    
+                    receiver.send(thisTid, plu);    
                 },
                 
                 // Unknown type

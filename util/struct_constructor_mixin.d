@@ -12,22 +12,22 @@ string genConstructor(T)(){
     c0 = "import std.conv:      parse;\n"
          "import std.algorithm: skipOver, countUntil;\n\n";
     
-    c1 ~=  "this(string s){\n" ~
-                    "    s.skipOver(\"" ~ T.stringof ~ "(\");";
+    c1 ~=  "this(string s__){\n" ~
+                    "    s__.skipOver(\"" ~ T.stringof ~ "(\");";
     c2 ~= "this(";
     foreach(i, memberType; typeof(T.tupleof)){
         if(memberType.stringof == "string"){
-            c1 ~=  "\n    s = s[1..$];\n    " ~
-                   T.tupleof[i].stringof ~ " = s[0..s.countUntil(\"\\\"\")];";
+            c1 ~=  "\n    s__ = s__[1..$];\n    " ~
+                   T.tupleof[i].stringof ~ " = s__[0..s__.countUntil(\"\\\"\")];";
             if(i < typeof(T.tupleof).length - 1){
-                c1 ~= "   s = s[s.countUntil(\"\\\"\")+3..$];";
+                c1 ~= "   s__ = s__[s__.countUntil(\"\\\"\")+3..$];";
             }
         } else {
             c1 ~=  "\n    " ~ T.tupleof[i].stringof ~
-                            " = s.parse!(" ~ memberType.stringof ~ 
+                            " = s__.parse!(" ~ memberType.stringof ~ 
                             ");";
             if(i < typeof(T.tupleof).length - 1){
-                c1 ~= "   s = s[2..$];";
+                c1 ~= "   s__ = s__[2..$];";
             }
         }
         

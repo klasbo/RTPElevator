@@ -13,7 +13,7 @@ void elevator_driver_test(){
 
     auto elevator = new SimulationElevator;
 
-    auto elevatorDriver = elevator_events_start(elevator);
+    auto elevatorDriver = elevatorEvents_start(elevator);
 
     auto lightsArr = new bool[][](4,3);
     bool stopLight;

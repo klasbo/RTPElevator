@@ -102,7 +102,7 @@ string spawn3way(string[] threads, bool shareThreads, bool linked = false){
 
     }
 
-    return out1 ~ out2 ~ out3 ~ "pragma(msg, \"mixin last line: \"); pragma(msg, __LINE__);";
+    return out1 ~ out2 ~ out3; // ~ "pragma(msg, \"mixin last line: \"); pragma(msg, __LINE__);";
 }
 
 /**

@@ -16,12 +16,17 @@ public {
     static this(){
         localIP     = new TcpSocket(new InternetAddress("www.google.com", 80)).localAddress.toAddrString;
         broadcastIP = localIP[0..localIP.lastIndexOf(".")+1] ~ "255";
+        _thisPeerID = localIP[localIP.lastIndexOf(".")+1..$].to!ubyte;
     }
 
-    Tid udp_p2p_start(){
-        Tid t = spawn( &udp_p2p );
-        receiveOnly!(initDone);
+    Tid udp_p2p_start(Tid receiver = thisTid){
+        Tid t = spawn( &udp_p2p, receiver );
+        receive((initDone id){});
         return t;
+    }
+    
+    ubyte thisPeerID(){
+        return _thisPeerID;
     }
 
     struct peerListUpdate {
@@ -34,6 +39,7 @@ public {
 private {
     string  localIP;
     string  broadcastIP;
+    ubyte   _thisPeerID;
     enum    msg_bufsize             = 1024;
     auto    iAmAliveSendInterval    = 300.msecs;
     auto    iAmAliveTimeout         = 1.seconds;
@@ -54,7 +60,7 @@ private {
 
 
 
-    void udp_p2p(){
+    void udp_p2p(Tid receiver){
         scope(exit) writeln(__FUNCTION__, " died");
         
         mixin(spawn3way(
@@ -75,13 +81,13 @@ private {
         while(true){
             receive(
                 (msgFromNetwork mfn){
-                    ownerTid.send(thisTid, mfn.msg);
+                    receiver.send(thisTid, mfn.msg);
                 },
                 (string msg){
                     msg_send_tid.send(msgToNetwork(msg));
                 },
                 (peerListUpdate plu){
-                    ownerTid.send(thisTid, plu);
+                    receiver.send(thisTid, plu);
                 },
                 (LinkTerminated lt){
                     
