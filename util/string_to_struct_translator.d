@@ -38,6 +38,9 @@ template stringToStructTranslator_thr(T...){
                         }
                     }
                     ownerTid.send(s);
+                },
+                (Variant v){
+                    ownerTid.send(v);
                 }
             );
         }
