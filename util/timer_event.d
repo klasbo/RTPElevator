@@ -48,9 +48,15 @@ try{
 
 
     void AddEvent(Tid owner, string eventName, SysTime timeOfEvent, Duration period, int type){
-        foreach(event; events){
+        foreach(ref event; events){
             if(owner == event.owner  &&  eventName == event.name){
-                debug writeln("Failure to add new event: Event \"" ~ eventName ~ "\" already exists for this owner");
+                if(type == periodic){
+                    event = Event(owner, eventName, timeOfEvent + period, period);
+                } else if(type == oneshot){
+                    event = Event(owner, eventName, timeOfEvent, 0.msecs);
+                } else {
+                    debug writeln("Failure to update event: Event type ", type, "  does not exist");
+                }
                 return;
             }
         }
