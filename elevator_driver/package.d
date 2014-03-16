@@ -44,10 +44,10 @@ public {
 private void elevatorEventsGenerator(shared Elevator e){
     Elevator elev = cast(Elevator)e;
 
-    auto buttonsArr = new bool[][](3,4);
+    auto buttonsArr     = new bool[][](3,4);
     bool stopBtn; 
     bool obstrSwitch;
-    int  currFloor;
+    int  currFloor      = -1;
 
     ownerTid.send(initDone());
     while(true){
