@@ -20,6 +20,7 @@ struct ElevatorStateWrapper {
     mixin(genConstructor!(typeof(this)));
 }
 struct ExternalOrder {
+    bool            pending;
     bool            active;
     ubyte           assignedID;
     ubyte[]         hasConfirmed;
@@ -40,13 +41,16 @@ struct OrderMsg {
     // order description
     ubyte           assignedID;
     int             floor;
-    ButtonType      button;
+    ButtonType      btn;
     
     // meta
-    ubyte           originID;
-    MsgType         msgType;
+    ubyte           orderOriginID;
+    ubyte           msgOriginID;
+    MessageType     msgType;
+    
+    mixin(genConstructor!(typeof(this)));
 }
-enum MsgType {
+enum MessageType {
     newOrder,
     ackOrder,
     confirmedOrder,
@@ -61,7 +65,10 @@ struct StateRestoreInfo {
     string          stateString;
 }
 
-
+enum {
+    UP,
+    DOWN
+}
 
 
 
