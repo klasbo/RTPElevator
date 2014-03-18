@@ -13,6 +13,11 @@ import  core.thread,
 
 public import  elevator_driver.i_elevator;
 
+enum RandomStart {
+    yes,
+    no
+}
+
 static this(){
     travelTime                  = 1500.msecs;
     doorOpenTime                = 650.msecs;
@@ -22,7 +27,7 @@ static this(){
 /**
 Visual representation of the elevator appears in a second window.
     Uses UDP port 40000 to communicate between the two windows.
-    
+
 Use QWE, SDF, ZXCV to control Up, Down, Command buttons.
 Use T for Stop button, G for obstruction switch.
 
@@ -34,12 +39,28 @@ Linux: Spawns the window using mate-terminal.
 class SimulationElevator : Elevator
 {
 public:
-    this(){
+    this(RandomStart rs){
         simulationLoop_thread = spawn( &thr_simulationLoop );
         buttons = new shared bool[][](4, 3);
         lights  = new shared bool[][](4, 3);
-        currDir = MotorDirection.STOP;
-        prevDir = MotorDirection.STOP;
+        final switch(rs) with(RandomStart){
+        case yes:
+            import std.random;
+            prevFloor = uniform(minFloor, maxFloor);
+            currFloor = dice(80,20) ? -1 : prevFloor;
+            nextFloor = prevFloor;
+            prevDir = dice(50,50) ? MotorDirection.DOWN : MotorDirection.UP;
+            currDir = MotorDirection.STOP;
+            break;
+        case no:
+            prevDir = MotorDirection.STOP;
+            currDir = MotorDirection.STOP;
+            break;
+        }
+    }
+
+    this(){
+        this(RandomStart.no);
     }
 
     int ReadButton(int floor, ButtonType b){
@@ -99,7 +120,7 @@ public:
         doorLight   = false;
         stpBtnLight = false;
         flrIndLight = 0;
-        
+
         simulationLoop_thread.send(stateUpdated());
     }
 
@@ -142,14 +163,14 @@ private {
     shared int              printCount;
     InternetAddress         addr;
     Socket                  sock;
-    
+
     // Settings
     Duration                travelTime;
     Duration                doorOpenTime;
     Duration                btnDepressedTime;
 
-    
-    
+
+
 
 void thr_simulationLoop(){
     scope(exit){ writeln(__FUNCTION__, " died"); }
@@ -179,8 +200,8 @@ void thr_simulationLoop(){
 
     Tid         timerEvent_thread;
     Tid         controlPanelInput_thread;
-    
-    
+
+
 
     // --- FUNCTIONS --- //
 
@@ -300,8 +321,8 @@ void thr_simulationLoop(){
         }
     }
 
-    
-    
+
+
 
     // --- INIT --- //
 
@@ -310,9 +331,9 @@ void thr_simulationLoop(){
     controlPanelInput_thread    = spawn( &thr_controlPanelInput );
     addr                        = new InternetAddress("localhost", 40000);
     sock                        = new UdpSocket();
-    
+
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-    
+
     // Create and spawn second window
     string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];
     std.file.write(path~"secondWindow1.d", secondWindowProgram);
@@ -323,7 +344,7 @@ void thr_simulationLoop(){
     }
     Thread.sleep(1.seconds);
     std.file.remove(path~"secondWindow1.d");
-    
+
 
     // --- LOOP --- //
     printState;
@@ -472,7 +493,7 @@ void printState(){
     bg[4][41-c.length..41] = c[0..$];
 
     sock.sendTo(bg.reduce!((a, b) => a ~ "\n" ~ b), addr);
-    
+
 }
 
 
@@ -488,20 +509,20 @@ struct stateUpdated {}
 
 
 
-auto secondWindowProgram = 
+auto secondWindowProgram =
 q"EOS
 import  std.stdio,
         std.socket,
         std.c.process;
-        
-void main(){    
+
+void main(){
     scope(exit) writeln(__FUNCTION__, " died");
 
     auto    addr    = new InternetAddress("localhost", 40000);
     auto    sock    = new UdpSocket();
-    
-    ubyte[2048]     buf;    
-    
+
+    ubyte[2048]     buf;
+
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
     sock.bind(addr);
 

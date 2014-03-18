@@ -62,7 +62,7 @@ try {
             OrderMsg
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
-        elevator                        = new SimulationElevator;
+        elevator                        = new SimulationElevator(RandomStart.yes);
         minFloor = elevator.minFloor;
         maxFloor = elevator.maxFloor;
         numFloors                       = maxFloor - minFloor + 1;
@@ -80,6 +80,10 @@ try {
         // TODO: get state from other elevators
         //   send request, send new timer event (100ms?)
         //   wait until timer event, deduce previous state
+        
+        if(elevator.ReadFloorSensor == -1){
+            elevator.SetMotorDirection(MotorDirection.DOWN);
+        }
 
 
 
@@ -416,13 +420,15 @@ try {
         final switch(state.dirn) with(MotorDirection){
         case UP:
             auto floorOfTopOrder = (state.orders.length.to!int - 1 - state.orders.map!any.retro.countUntil(true));
-            return  floorOfTopOrder == state.floor  ||
+            return  /+floorOfTopOrder == state.floor  ||+/
+                    !state.ordersAbove  ||
                     state.floor == maxFloor  ||
                     state.orders[floor][ButtonType.UP]  ||
                     state.orders[floor][ButtonType.COMMAND];
         case DOWN:
             auto floorOfBottomOrder = state.orders.map!any.countUntil(true);
-            return  floorOfBottomOrder == state.floor  ||
+            return  /+floorOfBottomOrder == state.floor  ||+/
+                    !state.ordersBelow  ||
                     state.floor == minFloor  ||
                     state.orders[floor][ButtonType.DOWN]  ||
                     state.orders[floor][ButtonType.COMMAND];
