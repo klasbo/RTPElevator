@@ -63,57 +63,33 @@ public:
         return (obstrSwch ? 1 : 0);
     }
 
-    void SetLight(string onoff)(int floor, Light l){
-        if(floor < minFloor  ||  floor > maxFloor){
-            assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
-        }
+    void SetLight(int floor, Light l, bool enable){
         if (l == Light.UP || l == Light.DOWN || l == Light.COMMAND){
-            static if (onoff.toLower == "on"){
-                lights[floor][l] = true;
-            } else static if (onoff.toLower == "off"){
-                lights[floor][l] = false;
-            } else {
-                static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
-            }
+            lights[floor][l] = enable;
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
     }
-    
+
     void SetLight(int floor, Light l){
         if (l == Light.FLOOR_INDICATOR){
             flrIndLight = floor;
         } else {
-            assert(0, "Floor-dependent light must be set on or off");
+            throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
     }
 
-    void SetLight(string onoff)(Light l){
+    void SetLight(Light l, bool enable){
         switch(l){
             case Light.STOP:
-                static if (onoff == "on"){
-                    stpBtnLight = true;
-                } else static if (onoff == "off"){
-                    stpBtnLight = false;
-                } else {
-                    static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
-                }
+                stpBtnLight = enable;
                 break;
             case Light.DOOR_OPEN:
-                static if (onoff == "on"){
-                    doorLight = true;
-                } else static if (onoff == "off"){
-                    doorLight = false;
-                } else {
-                    static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
-                }
+                doorLight = enable;
                 break;
             default:
-                assert(0, "Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
+                throw new Exception("Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
     }
 
     void ResetLights(){
@@ -431,8 +407,8 @@ void printState(){
 
     char[][] bg = [
         "+---------------+ +-+---------------+----+",
-        "|               | |d|  0  1  2      | o  |",
-        "| 0 - 1 - 2 - 3 | |u|     1  2  3   | d  |",
+        "|               | |u|  0  1  2      | o  |",
+        "| 0 - 1 - 2 - 3 | |d|     1  2  3   | d  |",
         "|       -       | |c|  0  1  2  3   | s  |",
         "+---------------+ +-+---------------+----+" ].to!(char[][]);
 

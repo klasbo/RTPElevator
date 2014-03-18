@@ -29,7 +29,7 @@ private {
     Tid         timerEventTid;
     Tid         stringToStructTranslatorTid;
     Tid         networkTid;
-    //Elevator    elevator;
+    Elevator    elevator;
     int         numFloors;
     Tid         elevatorEventsTid;
 
@@ -62,7 +62,7 @@ try {
             OrderMsg
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
-        auto elevator                   = new SimulationElevator;
+        elevator                        = new SimulationElevator;
         minFloor = elevator.minFloor;
         maxFloor = elevator.maxFloor;
         numFloors                       = maxFloor - minFloor + 1;
@@ -110,7 +110,7 @@ try {
                         break;
                     case COMMAND:
                         states[thisPeerID].internalOrders[bpe.floor] = true;
-                        elevator.SetLight!"on"(bpe.floor, Light.COMMAND);
+                        elevator.SetLight(bpe.floor, Light.COMMAND, true);
                         if(getThisState.isIdle){
                             timerEventTid.send(thisTid, doorClose, 0.seconds);
                             states[thisPeerID].dirn = getThisState.chooseDirn;
@@ -118,18 +118,18 @@ try {
                                 states[thisPeerID].moving = true;
                             }
                             elevator.SetMotorDirection(getThisState.chooseDirn);
-                        } else if(  !getThisState.moving  &&  
+                        } else if(  !getThisState.moving  &&
                                     getThisState.floor == bpe.floor  &&
                                     getThisState.shouldStop(bpe.floor))
                         {
                             elevator.SetMotorDirection(MotorDirection.STOP);
                             states[thisPeerID].moving = false;
                             timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                            elevator.SetLight!"on"(Light.DOOR_OPEN);
-                            elevator.SetLight!"off"(bpe.floor, Light.COMMAND);
+                            elevator.SetLight(Light.DOOR_OPEN, false);
+                            elevator.SetLight(bpe.floor, Light.COMMAND, false);
                             clearOrders(bpe.floor);
                         }
-                        break;                        
+                        break;
                     }
                     networkTid.send(wrappedState);
                 },
@@ -140,8 +140,8 @@ try {
                         elevator.SetMotorDirection(MotorDirection.STOP);
                         states[thisPeerID].moving = false;
                         timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                        elevator.SetLight!"on"(Light.DOOR_OPEN);
-                        elevator.SetLight!"off"(nfe, Light.COMMAND);
+                        elevator.SetLight(Light.DOOR_OPEN, true);
+                        elevator.SetLight(nfe, Light.COMMAND, false);
                         clearOrders(nfe);
                     }
                     networkTid.send(wrappedState);
@@ -167,7 +167,7 @@ try {
                             MessageType.ackOrder
                         ).to!string);
                         break;
-                        
+
                     case ackOrder:
                         if(!externalOrders[om.floor][om.btn].pending){
                             break;
@@ -175,7 +175,7 @@ try {
                         externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
                         // if origin = this
                         //   send confirmedOrder
-                        if( om.orderOriginID == thisPeerID  &&  
+                        if( om.orderOriginID == thisPeerID  &&
                             alivePeers
                             .sort
                             .setDifference(externalOrders[om.floor][om.btn].hasConfirmed.sort)
@@ -192,7 +192,7 @@ try {
                             timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
                         }
                         break;
-                        
+
                     case confirmedOrder:
                         // set light on
                         externalOrders[om.floor][om.btn].pending = false;
@@ -201,8 +201,8 @@ try {
                             writeln("  confirmedOrder.assignedID != externalOrders.assignedID!\n",
                                     "    ", om, "\n    ", externalOrders[om.floor][om.btn]);
                         }
-                        elevator.SetLight!"on"(om.floor, cast(Light)om.btn);
-                        
+                        elevator.SetLight(om.floor, cast(Light)om.btn, true);
+
                         // start elevator if idle
                         if(getThisState.isIdle){
                             timerEventTid.send(thisTid, doorClose, 0.seconds);
@@ -211,19 +211,19 @@ try {
                                 states[thisPeerID].moving = true;
                             }
                             elevator.SetMotorDirection(getThisState.chooseDirn);
-                        } else if(  !getThisState.moving  &&  
+                        } else if(  !getThisState.moving  &&
                                     getThisState.floor == om.floor  &&
                                     getThisState.shouldStop(om.floor))
                         {
                             elevator.SetMotorDirection(MotorDirection.STOP);
                             states[thisPeerID].moving = false;
                             timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                            elevator.SetLight!"on"(Light.DOOR_OPEN);
-                            elevator.SetLight!"off"(om.floor, Light.COMMAND);
+                            elevator.SetLight(Light.DOOR_OPEN, true);
+                            elevator.SetLight(om.floor, Light.COMMAND, false);
                             clearOrders(om.floor);
                         }
                         break;
-                        
+
                     case completedOrder:
                         // remove from externalOrders
                         externalOrders[om.floor][om.btn].pending = false;
@@ -231,7 +231,7 @@ try {
                         externalOrders[om.floor][om.btn].assignedID = 0;
                         externalOrders[om.floor][om.btn].hasConfirmed.clear;
                         // set light off
-                        elevator.SetLight!"off"(om.floor, cast(Light)om.btn);
+                        elevator.SetLight(om.floor, cast(Light)om.btn, false);
                         break;
                     }
                 },
@@ -257,10 +257,8 @@ try {
                 (Tid t, string s){
                     if(t == timerEventTid){
                         writeln("  New timer event: ", s);
-                        // --- order ack timeout --- //
                         // --- door close --- //
                         if(s == doorClose){
-                            writeln("Closing door with: ", getThisState);
                             if(!getThisState.hasOrders){
                                 states[thisPeerID].moving = false;
                                 states[thisPeerID].dirn = MotorDirection.STOP;
@@ -268,15 +266,18 @@ try {
                                 states[thisPeerID].dirn = getThisState.chooseDirn;
                                 elevator.SetMotorDirection(states[thisPeerID].dirn);
                                 if(states[thisPeerID].dirn != MotorDirection.STOP){
-                                    elevator.SetLight!"off"(Light.DOOR_OPEN);
+                                    elevator.SetLight(Light.DOOR_OPEN, false);
                                     states[thisPeerID].moving = true;
                                 } else {
-                                    elevator.SetLight!"off"(states[thisPeerID].floor, Light.COMMAND);
+                                    elevator.SetLight(states[thisPeerID].floor, Light.COMMAND, false);
                                     clearOrders(states[thisPeerID].floor);
                                 }
                             }
                             networkTid.send(wrappedState);
-                        } else if(s.skipOver("ack")){
+                            return;
+                        }
+                        // --- order ack timeout --- //
+                        if(s.skipOver("ack")){
                             networkTid.send(OrderMsg(
                                 thisPeerID,
                                 s.parse!int,
@@ -285,6 +286,7 @@ try {
                                 thisPeerID,
                                 MessageType.newOrder
                             ).to!string);
+                            return;
                         }
                     }
                 },
@@ -324,9 +326,8 @@ try {
         .filter!(a => alivePeers.canFind(a[0]))
         .assocArray;
     }
-    
+
     void clearOrders(int floor){
-        writeln("Clearing orders at floor ", floor);
         states[thisPeerID].internalOrders[floor] = false;
         final switch(states[thisPeerID].dirn) with(MotorDirection) {
         case UP:
@@ -392,21 +393,21 @@ try {
         bool[][] b;
         return
         states
-        .map!(a => 
+        .map!(a =>
             GeneralizedElevatorState(
                 a.floor,
                 a.dirn,
                 a.moving,
-                ( b = a.orders.map!(a=>a.dup).array, 
-                  b[bpe.floor][bpe.btn] = true, 
+                ( b = a.orders.map!(a=>a.dup).array,
+                  b[bpe.floor][bpe.btn] = true,
                   b),
                 a.ID
             )
         )
         .array;
-            
+
     }
-    
+
     GeneralizedElevatorState getThisState(){
         return states[thisPeerID].generalize(thisPeerID, externalOrders);
     }

@@ -92,34 +92,31 @@ class ComediElevator : Elevator
         }
 
         /** Sets the floor-dependent lights:<br>
-         *   Hallway (UP/DOWN), and internal (COMMAND)<br>
-         *   Statically fails if an invalid on/off parameter is given<br>
-         *   Throws assertError if an invalid Light type is given, or if a _floor is out of bounds<br>
+         *   Hallway (UP/DOWN) and internal (COMMAND) only<br>
+         *   Throws exception if an invalid light is given<br>
+         *   If a _floor is out of bounds, it will set the light at the closest _floor<br>
          */
-        void SetLight(string onoff)(int floor, Light l){
-            if(floor < ComediElevator.minFloor  ||  floor > ComediElevator.maxFloor){
-                assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
-            }
+        void SetLight(int floor, Light l, bool enable){
+            floor = coerce(floor, ComediElevator.minFloor, ComediElevator.maxFloor);
+            
             if (l == Light.UP || l == Light.DOWN || l == Light.COMMAND){
-                static if (onoff == "on"){
+                if (enable){
                     io_set_bit(lampChannelMatrix[floor][l]);
-                } else static if (onoff == "off"){
-                    io_clear_bit(lampChannelMatrix[floor][l]);
                 } else {
-                    static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
+                    io_clear_bit(lampChannelMatrix[floor][l]);
                 }
             } else {
-                assert(0, "Invalid argument. Use a floor-dependent light. Got " ~ l.to!string);
+                throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
             }
         }
-        
-        /** Sets the FLOOR_INDICATOR light only<br>
-         *   Since this light cannot be set on or off, it does not have the onoff template argument
+
+        /** Sets the FLOOR_INDICATOR light only
+         *   Throws exception if an invalid light is given<br>
+         *   If a _floor is out of bounds, it will set the light at the closest _floor<br>
          */
         void SetLight(int floor, Light l){
-            if(floor < ComediElevator.minFloor  ||  floor > ComediElevator.maxFloor){
-                assert(0, "SetLight floor is out of bounds: floor = " ~ floor.to!string);
-            }
+            floor = coerce(floor, ComediElevator.minFloor, ComediElevator.maxFloor);
+            
             if (l == Light.FLOOR_INDICATOR){     // So this thing is ugly. I don't know why these lights are encoded binary-esque.
                 if (floor & 0x02){                      //   Copied from Martin Korsgaard's "elev_set_floor_indicator(int floor)"
                     io_set_bit(FLOOR_IND1);
@@ -132,47 +129,36 @@ class ComediElevator : Elevator
                     io_clear_bit(FLOOR_IND2);
                 }
             } else {
-                assert(0, "Floor-dependent light must be set on or off");
+                throw new Exception("Invalid argument. This function is for the FLOOR_INDICATOR light only. Got " ~ to!(string)(l));
             }
         }
         
-
         /** Sets the floor-invariant lights:<br>
          *   Emergency stop (STOP), and door open (DOOR_OPEN)<br>
          *   Throws exception if an invalid light or invalid on/off parameter is given<br>
          */
-        void SetLight(string onoff)(Light l){
-            if (l == Light.STOP){
-                static if (onoff == "on"){
-                    io_set_bit(LIGHT_STOP);
-                } else static if (onoff == "off"){
-                    io_clear_bit(LIGHT_STOP);
+        void SetLight(Light l, bool enable){
+            if (l == Light.STOP || l == Light.DOOR_OPEN){
+                if (enable){
+                    io_set_bit(lampChannelMatrix[0][l]);
                 } else {
-                    static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
-                }
-            } else if (l == Light.DOOR_OPEN){
-                static if (onoff == "on"){
-                    io_set_bit(DOOR_OPEN);
-                } else static if (onoff == "off"){
-                    io_clear_bit(DOOR_OPEN);
-                } else {
-                    static assert(0, "Invalid argument. Use \"on\" or \"off\". Got " ~ onoff);
+                    io_clear_bit(lampChannelMatrix[0][l]);
                 }
             } else {
-                assert(0, "Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
+                throw new Exception("Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
             }
         }
 
         /// Turns off all lights. Sets floor indicator to floor 0. Use with care.
         void ResetLights(){
                 for(int j = ComediElevator.minFloor; j <= ComediElevator.maxFloor; j++){
-                    SetLight!"off"(j, Light.UP);
-                    SetLight!"off"(j, Light.DOWN);
-                    SetLight!"off"(j, Light.COMMAND);
+                    SetLight(j, Light.UP, false);
+                    SetLight(j, Light.DOWN, false);
+                    SetLight(j, Light.COMMAND, false);
                 }
-                SetLight!"off"(Light.STOP);
-                SetLight!"off"(Light.DOOR_OPEN);
-                SetLight(0, Light.FLOOR_INDICATOR);
+                SetLight(Light.STOP, false);
+                SetLight(Light.DOOR_OPEN, false);
+                SetLight(Light.FLOOR_INDICATOR, true);
         }
 
 
@@ -231,8 +217,8 @@ class ComediElevator : Elevator
         int             MotorSpeed      = 500;
         auto            lastMotorDir    = MotorDirection.STOP;  // Used in SetMotorDirection. Try to not use it anywhere else.
 
-        @property int   _minFloor     = 0;
-        @property int   _maxFloor     = 3;
+        int   _minFloor     = 0;
+        int   _maxFloor     = 3;
 
 
 

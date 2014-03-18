@@ -26,21 +26,21 @@ void elevator_driver_test(){
             (btnPressEvent bpe){
                 writeln("The ", bpe.btn, " button on floor ", bpe.floor, " was pressed");
                 lightsArr[bpe.floor][bpe.btn] =! lightsArr[bpe.floor][bpe.btn]
-                    ? (elevator.SetLight!"on"(bpe.floor, cast(Light)bpe.btn), true)
-                    : (elevator.SetLight!"off"(bpe.floor, cast(Light)bpe.btn), false);
+                    ? (elevator.SetLight(bpe.floor, cast(Light)bpe.btn, true), true)
+                    : (elevator.SetLight(bpe.floor, cast(Light)bpe.btn, false), false);
             },
             (stopBtnEvent sbe){
                 writeln("The STOP button was pressed");
                 stopLight =! stopLight
-                    ? (elevator.SetLight!"on"(Light.STOP), true)
-                    : (elevator.SetLight!"off"(Light.STOP), false);
+                    ? (elevator.SetLight(Light.STOP, true), true)
+                    : (elevator.SetLight(Light.STOP, false), false);
                 elevator.SetMotorDirection(MotorDirection.STOP);
             },
             (obstrSwitchEvent obstr){
                 writeln("The obstruction is " ~ (obstr ? "active" : "inactive"));
                 doorOpenLight =! doorOpenLight
-                    ? (elevator.SetLight!"on"(Light.DOOR_OPEN), true)
-                    : (elevator.SetLight!"off"(Light.DOOR_OPEN), false);
+                    ? (elevator.SetLight(Light.DOOR_OPEN, true), true)
+                    : (elevator.SetLight(Light.DOOR_OPEN, false), false);
             },
             (newFloorEvent newFloor){
                 writeln("Arrived at floor ", newFloor);
