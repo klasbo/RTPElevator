@@ -22,6 +22,9 @@ static this(){
     travelTime                  = 1500.msecs;
     doorOpenTime                = 650.msecs;
     btnDepressedTime            = 200.msecs;
+    addr                        = new InternetAddress("localhost", 40000);
+    sock                        = new UdpSocket();
+    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 }
 
 /**
@@ -90,6 +93,7 @@ public:
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void SetLight(int floor, Light l){
@@ -98,6 +102,7 @@ public:
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void SetLight(Light l, bool enable){
@@ -111,6 +116,7 @@ public:
             default:
                 throw new Exception("Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
         }
+        simulationLoop_thread.send(stateUpdated());
     }
 
     void ResetLights(){
@@ -329,10 +335,7 @@ void thr_simulationLoop(){
 
     timerEvent_thread           = spawn( &timerEvent_thr );
     controlPanelInput_thread    = spawn( &thr_controlPanelInput );
-    addr                        = new InternetAddress("localhost", 40000);
-    sock                        = new UdpSocket();
 
-    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
     // Create and spawn second window
     string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];

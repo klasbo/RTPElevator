@@ -59,10 +59,12 @@ enum MessageType {
 
 struct StateRestoreRequest {
     ubyte           askerID;
+    mixin(genConstructor!(typeof(this)));
 }
 struct StateRestoreInfo {
     ubyte           belongsTo;
     string          stateString;
+    mixin(genConstructor!(typeof(this)));
 }
 
 enum {

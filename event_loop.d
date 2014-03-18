@@ -59,7 +59,9 @@ try {
         timerEventTid                   = spawn( &timerEvent_thr );
         stringToStructTranslatorTid     = spawn( &stringToStructTranslator_thr!(
             ElevatorStateWrapper,
-            OrderMsg
+            OrderMsg,
+            StateRestoreRequest,
+            StateRestoreInfo
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
         elevator                        = new SimulationElevator(RandomStart.yes);
@@ -77,9 +79,10 @@ try {
 
         /// ----- INIT PHASE ----- ///
         states[thisPeerID] = uninitializedElevatorState;
-        // TODO: get state from other elevators
-        //   send request, send new timer event (100ms?)
-        //   wait until timer event, deduce previous state
+        // send request, send new timer event (100ms?)
+        // wait until timer event, deduce previous state
+        // Currently: Do logical or whenever StateRestoreInfo arrives
+        networkTid.send(StateRestoreRequest(thisPeerID).to!string);
         
         if(elevator.ReadFloorSensor == -1){
             elevator.SetMotorDirection(MotorDirection.DOWN);
@@ -90,6 +93,19 @@ try {
         ownerTid.send(types.initDone());
         while(true){
             receive(
+                (StateRestoreInfo sri){
+                    if(sri.belongsTo == thisPeerID){
+                        writeln("  GOT STATE RESTORE INFO: ", sri);
+                        auto prevState = ElevatorState(sri.stateString);
+                        if(prevState.internalOrders.length == states[thisPeerID].internalOrders.length){
+                            states[thisPeerID].internalOrders = 
+                                states[thisPeerID].internalOrders.zip(prevState.internalOrders)
+                                .map!(a => a[0] || a[1])
+                                .array;
+                            states.writeln;
+                        }
+                    }
+                },
                 // --- FROM ELEVATOR HARDWARE --- //
                 (btnPressEvent bpe){
                     writeln("  New button press: ", bpe);
@@ -248,6 +264,9 @@ try {
                     states[essw.belongsTo] = ElevatorState(essw.content);
                 },
                 (StateRestoreRequest srr){
+                    if(srr.askerID == thisPeerID){
+                        return;
+                    }
                     networkTid.send(
                         StateRestoreInfo(
                             srr.askerID,
@@ -409,7 +428,6 @@ try {
             )
         )
         .array;
-
     }
 
     GeneralizedElevatorState getThisState(){

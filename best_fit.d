@@ -47,12 +47,12 @@ int timeUntil(ref GeneralizedElevatorState s, Button b){
 
     final switch(s.dirn) with(MotorDirection){
     case STOP:
-        int numButtonPresses = s.orders.map!(a => a.count(true)).reduce!"a+b";
+        int numButtonPresses = s.orders.map!(a => a.count(true)).reduce!"a+b".to!int;
         if(s.dirn == MotorDirection.STOP  &&  numButtonPresses > 1){
             writeln("dirn == STOP and more than one order makes no sense");
             return int.max;
         }
-        int floorOfOnlyOrder = s.orders.map!any.countUntil(true);
+        int floorOfOnlyOrder = s.orders.map!any.countUntil(true).to!int;
         timeInDir += (s.floor - floorOfOnlyOrder).abs * travelTime;        
         timeInDir += doorOpenTime;
         
@@ -66,7 +66,7 @@ int timeUntil(ref GeneralizedElevatorState s, Button b){
         if(b.floor != -1  &&  b.floor > s.floor  &&  b.btn == ButtonType.UP){
             floorOfTopOrder = b.floor;
         } else {
-            floorOfTopOrder = (s.orders.length.to!int - 1 - s.orders.map!any.retro.countUntil(true));
+            floorOfTopOrder = (s.orders.length.to!int - 1 - s.orders.map!any.retro.countUntil(true).to!int);
         }
         timeInDir += (floorOfTopOrder - s.floor) * travelTime;
         if(s.moving){
@@ -92,7 +92,7 @@ int timeUntil(ref GeneralizedElevatorState s, Button b){
         if(b.floor != -1  &&  b.floor < s.floor  &&  b.btn == ButtonType.DOWN){
             floorOfBottomOrder = b.floor;
         } else {
-            floorOfBottomOrder = s.orders.map!any.countUntil(true);
+            floorOfBottomOrder = s.orders.map!any.countUntil(true).to!int;
         }
         timeInDir += (s.floor - floorOfBottomOrder) * travelTime;
         if(s.moving){
