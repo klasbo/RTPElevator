@@ -4,6 +4,7 @@ import  std.stdio,
         std.range,
         std.conv,
         std.array,
+        std.random,
         std.datetime;
 
 import  elevator_driver,
@@ -30,22 +31,20 @@ private {
     Tid         stringToStructTranslatorTid;
     Tid         networkTid;
     Elevator    elevator;
-    int         numFloors;
     Tid         elevatorEventsTid;
 
 
     /// ----- CONSTANTS ----- ///
-    auto        doorClose       = "doorClose";
-    auto        doorOpenTime    = 3.seconds;
-    auto        ackTimeout      = 100.msecs;
+    auto        doorClose               = "doorClose";
+    auto        reassignUnlinkedOrders  = "reassignUnlinkedOrders";
+    auto        doorOpenTime            = 3.seconds;
+    auto        ackTimeout              = 50.msecs;
 
 
     /// ----- VARIABLES ----- ///
     ExternalOrder[][]       externalOrders;
     ElevatorState[ubyte]    states;
     ubyte[]                 alivePeers;
-    int                     maxFloor;
-    int                     minFloor;
 
 
 
@@ -65,9 +64,6 @@ try {
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
         elevator                        = new SimulationElevator(RandomStart.yes);
-        minFloor = elevator.minFloor;
-        maxFloor = elevator.maxFloor;
-        numFloors                       = maxFloor - minFloor + 1;
         elevatorEventsTid               = elevatorEvents_start(elevator);
 
         // Variables //
@@ -87,6 +83,8 @@ try {
         if(elevator.ReadFloorSensor == -1){
             elevator.SetMotorDirection(MotorDirection.DOWN);
         }
+        
+        timerEventTid.send(thisTid, reassignUnlinkedOrders, 5.seconds);
 
 
 
@@ -279,9 +277,9 @@ try {
                 // --- FROM TIMER --- //
                 (Tid t, string s){
                     if(t == timerEventTid){
-                        writeln("  New timer event: ", s);
                         // --- door close --- //
                         if(s == doorClose){
+                            writeln("  New timer event: ", doorClose);
                             if(!getThisState.hasOrders){
                                 states[thisPeerID].moving = false;
                                 states[thisPeerID].dirn = MotorDirection.STOP;
@@ -310,6 +308,28 @@ try {
                                 MessageType.newOrder
                             ).to!string);
                             return;
+                        }
+                        // --- Order reassignment & data integrity checker --- //
+                        if(s == reassignUnlinkedOrders){
+                            foreach(floor, row; externalOrders){
+                                foreach(btn, order; row){
+                                    if(order.active  &&  !alivePeers.canFind(order.assignedID)){
+                                        networkTid.send(OrderMsg(
+                                            states
+                                                .filterAlive(alivePeers)
+                                                .generalize(externalOrders)
+                                                .augment(btnPressEvent(cast(ButtonType)btn, floor))
+                                                .bestFit,
+                                            floor,
+                                            cast(ButtonType)btn,
+                                            thisPeerID,
+                                            thisPeerID,
+                                            MessageType.newOrder
+                                        ).to!string);
+                                    }
+                                }
+                            }
+                            timerEventTid.send(thisTid, reassignUnlinkedOrders, uniform(3,8).seconds);
                         }
                     }
                 },
@@ -440,14 +460,14 @@ try {
             auto floorOfTopOrder = (state.orders.length.to!int - 1 - state.orders.map!any.retro.countUntil(true));
             return  /+floorOfTopOrder == state.floor  ||+/
                     !state.ordersAbove  ||
-                    state.floor == maxFloor  ||
+                    state.floor == elevator.maxFloor  ||
                     state.orders[floor][ButtonType.UP]  ||
                     state.orders[floor][ButtonType.COMMAND];
         case DOWN:
             auto floorOfBottomOrder = state.orders.map!any.countUntil(true);
             return  /+floorOfBottomOrder == state.floor  ||+/
                     !state.ordersBelow  ||
-                    state.floor == minFloor  ||
+                    state.floor == elevator.minFloor  ||
                     state.orders[floor][ButtonType.DOWN]  ||
                     state.orders[floor][ButtonType.COMMAND];
         case STOP:
@@ -477,13 +497,13 @@ try {
         }
         final switch(state.dirn) with(MotorDirection){
         case UP:
-            if(state.ordersAbove  &&  state.floor != maxFloor){
+            if(state.ordersAbove  &&  state.floor != elevator.maxFloor){
                 return UP;
             } else {
                 return DOWN;
             }
         case DOWN:
-            if(state.ordersBelow  &&  state.floor != minFloor){
+            if(state.ordersBelow  &&  state.floor != elevator.minFloor){
                 return DOWN;
             } else {
                 return UP;
@@ -501,6 +521,10 @@ try {
 
     string ack(int floor, ButtonType btn){
         return "ack" ~ floor.to!string ~ btn.to!string;
+    }
+    
+    int numFloors(){
+        return elevator.maxFloor - elevator.minFloor + 1;
     }
 }
 /+
