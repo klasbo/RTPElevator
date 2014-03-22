@@ -100,7 +100,11 @@ try {
                                 states[thisPeerID].internalOrders.zip(prevState.internalOrders)
                                 .map!(a => a[0] || a[1])
                                 .array;
-                            states.writeln;
+                            foreach(floor, a; states[thisPeerID].internalOrders){
+                                if(a){
+                                    elevator.SetLight(floor.to!int, Light.COMMAND, true);
+                                }
+                            }
                         }
                     }
                 },
@@ -318,9 +322,9 @@ try {
                                             states
                                                 .filterAlive(alivePeers)
                                                 .generalize(externalOrders)
-                                                .augment(btnPressEvent(cast(ButtonType)btn, floor))
+                                                .augment(btnPressEvent(cast(ButtonType)btn, floor.to!int))
                                                 .bestFit,
-                                            floor,
+                                            floor.to!int,
                                             cast(ButtonType)btn,
                                             thisPeerID,
                                             thisPeerID,
