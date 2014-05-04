@@ -42,7 +42,7 @@ void elevator_driver_test(){
                     ? (elevator.SetLight(Light.DOOR_OPEN, true), true)
                     : (elevator.SetLight(Light.DOOR_OPEN, false), false);
             },
-            (newFloorEvent newFloor){
+            (floorArrivalEvent newFloor){
                 writeln("Arrived at floor ", newFloor);
                 if(newFloor == elevator.maxFloor){
                     elevator.SetMotorDirection(MotorDirection.DOWN);

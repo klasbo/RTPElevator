@@ -32,10 +32,10 @@ public {
         bool        active;
         alias active this;
     }
-    struct newFloorEvent {
+    struct floorArrivalEvent {
         int         floor;
         invariant() {
-            assert(floor >= 0, "newFloorEvent floor must be positive");
+            assert(floor >= 0, "floorArrivalEvent floor must be positive");
         }
         alias floor this;
     }
@@ -84,7 +84,7 @@ private void elevatorEventsGenerator(shared Elevator e){
         if(currFloor != (currFloor = elev.ReadFloorSensor)  &&  currFloor != -1){
             elev.SetLight(currFloor, Light.FLOOR_INDICATOR);
             debug(elevator_driver) writeln("Arrived at floor ", currFloor);
-            ownerTid.send(newFloorEvent(currFloor));
+            ownerTid.send(floorArrivalEvent(currFloor));
         }
     }
 }
