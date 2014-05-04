@@ -7,6 +7,19 @@ import  std.conv,
         std.string;
 
 
+extern(C) void sigintHandler(int i){
+    io_write_analog(MOTOR, 2048);
+    import std.c.process;
+    exit(0);
+}
+
+static this(){
+    version(linux){
+        import core.sys.posix.signal;
+        sigset(SIGINT, &sigintHandler);
+    }
+}
+
 
 
 /**
@@ -36,6 +49,7 @@ class ComediElevator : Elevator
         if (!io_init()){
             throw new Exception("Unable to initialize elevator hardware");
         }
+        this.ResetLights;
     }
     /**
      * Stops the elevator and destroys the ComediElevator instance
@@ -138,11 +152,17 @@ class ComediElevator : Elevator
          *   Throws exception if an invalid light or invalid on/off parameter is given<br>
          */
         void SetLight(Light l, bool enable){
-            if (l == Light.STOP || l == Light.DOOR_OPEN){
-                if (enable){
-                    io_set_bit(lampChannelMatrix[0][l]);
+            if(l == Light.STOP){
+                if(enable){
+                    io_set_bit(LIGHT_STOP);
                 } else {
-                    io_clear_bit(lampChannelMatrix[0][l]);
+                    io_clear_bit(LIGHT_STOP);
+                }
+            } else if(l == Light.DOOR_OPEN){
+                if(enable){
+                    io_set_bit(DOOR_OPEN);
+                } else {
+                    io_clear_bit(DOOR_OPEN);
                 }
             } else {
                 throw new Exception("Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
@@ -158,7 +178,7 @@ class ComediElevator : Elevator
                 }
                 SetLight(Light.STOP, false);
                 SetLight(Light.DOOR_OPEN, false);
-                SetLight(Light.FLOOR_INDICATOR, true);
+                SetLight(0, Light.FLOOR_INDICATOR);
         }
 
 

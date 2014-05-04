@@ -73,6 +73,7 @@ try {
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
         elevator                        = new SimulationElevator(RandomStart.yes);
+//        elevator                        = new ComediElevator;
         elevatorEventsTid               = elevatorEvents_start(elevator);
 
         // Variables //
@@ -365,26 +366,38 @@ try {
         final switch(states[thisPeerID].dirn) with(MotorDirection) {
         case UP:
             if(externalOrders[floor][UP].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             if(!getThisState.ordersAbove  &&  externalOrders[floor][DOWN].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             break;
         case DOWN:
             if(externalOrders[floor][DOWN].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             if(!getThisState.ordersBelow  &&  externalOrders[floor][UP].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             break;
         case STOP:
             if(externalOrders[floor][UP].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             if(externalOrders[floor][DOWN].active){
-                networkTid.send(OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder).to!string);
+                auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
+                thisTid.send(om);
+                networkTid.send(om.to!string);
             }
             break;
         }
