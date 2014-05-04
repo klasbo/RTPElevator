@@ -1,19 +1,18 @@
-import  std.stdio,
-        std.concurrency,
-        std.algorithm,
-        std.range,
-        std.conv,
+import  std.algorithm,
         std.array,
+        std.concurrency,
+        std.conv,
+        std.datetime,
         std.random,
-        std.datetime;
+        std.range,
+        std.stdio;
 
-import  elevator_driver,
-        util.timer_event,
-        util.string_to_struct_translator,
-        util.timer_event,
+import  best_fit,
+        elevator_driver,
         network.udp_p2p,
         types,
-        best_fit;
+        util.string_to_struct_translator,
+        util.timer_event;
 
 
 public {
@@ -25,13 +24,8 @@ public {
 }
 
 
-/+
-TODO:
-    State restore only restores internal info. This means that two consecutive losses may lose external orders
-        Solution: Send OrderMsg with MessageType confirmedOrder for all active external orders
-        
-    Differentiate between member functions and free functions
-+/
+
+
 
 private {
 
@@ -63,7 +57,6 @@ private {
     void eventLoop(){
         scope(exit){ writeln(__FUNCTION__, " has died"); }
 try {
-        // Dependencies //
         timerEventTid                   = spawn( &timerEvent_thr );
         stringToStructTranslatorTid     = spawn( &stringToStructTranslator_thr!(
             ElevatorStateWrapper,
@@ -76,26 +69,22 @@ try {
 //        elevator                        = new ComediElevator;
         elevatorEventsTid               = elevatorEvents_start(elevator);
 
-        // Variables //
-        externalOrders = new ExternalOrder[][](elevator.numFloors, 2);
+
+        externalOrders                  = new ExternalOrder[][](elevator.numFloors, 2);
+        states[thisPeerID]              = uninitializedElevatorState(elevator.numFloors);
 
 
-        writeln("Event loop started");
 
-
-        /// ----- INIT PHASE ----- ///
-        states[thisPeerID] = uninitializedElevatorState(elevator.numFloors);
-        networkTid.send(StateRestoreRequest(thisPeerID).to!string);
-        
         if(elevator.ReadFloorSensor == -1){
             elevator.SetMotorDirection(MotorDirection.DOWN);
         }
-        
+
+        networkTid.send(StateRestoreRequest(thisPeerID).to!string);
         timerEventTid.send(thisTid, reassignUnlinkedOrders, 5.seconds);
-
-
-
         ownerTid.send(types.initDone());
+
+
+        writeln("Event loop started");
         while(true){
             receive(
                 (StateRestoreInfo sri){
@@ -103,7 +92,7 @@ try {
                         writeln("  New state restore info: ", sri);
                         auto prevState = ElevatorState(sri.stateString);
                         if(prevState.internalOrders.length == states[thisPeerID].internalOrders.length){
-                            states[thisPeerID].internalOrders = 
+                            states[thisPeerID].internalOrders =
                                 states[thisPeerID].internalOrders.zip(prevState.internalOrders)
                                 .map!(a => a[0] || a[1])
                                 .array;
@@ -113,6 +102,9 @@ try {
                                 }
                             }
                         }
+                        if(states[thisPeerID].floor == -1){ // still not arrived at a valid floor
+                            states[thisPeerID].floor = prevState.floor;
+                        }
                     }
                 },
                 // --- FROM ELEVATOR HARDWARE --- //
@@ -120,7 +112,7 @@ try {
                     writeln("  New button press: ", bpe);
                     final switch(bpe.btn) with(ButtonType){
                     case UP, DOWN:
-                        if(externalOrders[bpe.floor][bpe.btn].active){
+                        if(externalOrders[bpe.floor][bpe.btn].status == ExternalOrder.Status.active){
                             break;
                         }
                         networkTid.send(OrderMsg(
@@ -135,25 +127,30 @@ try {
                             thisPeerID,
                             MessageType.newOrder
                         ).to!string);
+
                         timerEventTid.send(thisTid, ack(bpe.floor, bpe.btn), ackTimeout);
+
                         break;
                     case COMMAND:
                         states[thisPeerID].internalOrders[bpe.floor] = true;
-                        elevator.SetLight(bpe.floor, Light.COMMAND, true); 
-                        
+
+                        elevator.SetLight(bpe.floor, Light.COMMAND, true);
+
                         if( !getThisState.moving  &&
                             getThisState.floor == bpe.floor  &&
                             getThisState.shouldStop(bpe.floor))
                         {
                             timerEventTid.send(thisTid, doorClose, doorOpenTime);
                             clearOrders(bpe.floor);
-                        } else {
+                        }
+                        if(getThisState.isIdle){
                             timerEventTid.send(thisTid, doorClose, 0.seconds);
-                        }                            
-                        
+                        }
+
+                        networkTid.send(wrappedState);
+
                         break;
                     }
-                    networkTid.send(wrappedState);
                 },
                 (floorArrivalEvent fae){
                     writeln("  New floor: ", fae);
@@ -173,76 +170,122 @@ try {
                     writeln("  New order message: ", om);
                     final switch(om.msgType) with(MessageType){
                     case newOrder:
-                        // add to externalOrders
-                        externalOrders[om.floor][om.btn].pending = true;
-                        externalOrders[om.floor][om.btn].active = false;
-                        externalOrders[om.floor][om.btn].assignedID = om.assignedID;
-                        externalOrders[om.floor][om.btn].hasConfirmed.clear;
-                        // reply with ackOrder from this
-                        networkTid.send(OrderMsg(
-                            om.assignedID,
-                            om.floor,
-                            om.btn,
-                            om.orderOriginID,
-                            thisPeerID,
-                            MessageType.ackOrder
-                        ).to!string);
-                        break;
-
-                    case ackOrder:
-                        if(!externalOrders[om.floor][om.btn].pending){
-                            break;
-                        }
-                        externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
-                        // if origin = this
-                        //   send confirmedOrder
-                        if( om.orderOriginID == thisPeerID  &&
-                            alivePeers
-                            .sort
-                            .setDifference(externalOrders[om.floor][om.btn].hasConfirmed.sort)
-                            .empty)
-                        {
+                        final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
+                        case inactive:
+                            // add to externalOrders
+                            externalOrders[om.floor][om.btn].status = pending;
+                            externalOrders[om.floor][om.btn].assignedID = om.assignedID;
+                            externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                            // reply with ackOrder from this
                             networkTid.send(OrderMsg(
                                 om.assignedID,
                                 om.floor,
                                 om.btn,
                                 om.orderOriginID,
                                 thisPeerID,
-                                MessageType.confirmedOrder
+                                MessageType.ackOrder
                             ).to!string);
-                            timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
+                            break;
+                        case pending:
+                            //  ok: will happen if either:
+                            //      two origins sent the same newOrder before confirmedOrder was sent
+                            //          > ackOrder will only be received/handled by the origin, and ack will time out
+                            //      an ack has timed out, resulting in no confirmedOrder being sent
+                            //          > light will not be turned on, user presses button again
+                            break;
+                        case active:
+                            if(!alivePeers.canFind(externalOrders[om.floor][om.btn].assignedID)){
+                                goto case inactive;
+                            }
+                            //  ok: will happen if either:
+                            //      on reassignUnlinkedOrders (implies that om.assignedID != order.assignedID)
+                            //          - This is intentional
+                            //      another elevators external order is not active (information mismatch)
+                            //          > the order already exists on this elevator, so another elevator should show up
+                            //          possible remedy: send confirmedOrder to messageOriginID with current info
+                            break;
                         }
                         break;
 
+                    case ackOrder: if(om.orderOriginID == thisPeerID){
+                        final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
+                        case inactive:
+                            //  ok: Only makes sense to accept ack's of pending orders where origin = this
+                            writeln("Warning: Refused an acknowledgement of an order that is inactive");
+                            break;
+                        case pending:
+                            externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
+                            // if all alive peers have ack'd
+                            //   send confirmedOrder
+                            if( alivePeers
+                                .sort
+                                .setDifference(externalOrders[om.floor][om.btn].hasConfirmed.sort)
+                                .empty)
+                            {
+                                networkTid.send(OrderMsg(
+                                    om.assignedID,
+                                    om.floor,
+                                    om.btn,
+                                    om.orderOriginID,
+                                    thisPeerID,
+                                    MessageType.confirmedOrder
+                                ).to!string);
+                                timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
+                                externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                            }
+                            break;
+                        case active:
+                            //  ok: Only makes sense to accept ack's of pending orders where origin = this
+                            writeln("Warning: Refused an acknowledgement of an order that is already active");
+                            break;
+                        }
+
+                        } break;
+
                     case confirmedOrder:
-                        // set light on
-                        externalOrders[om.floor][om.btn].pending = false;
-                        externalOrders[om.floor][om.btn].active = true;
-                        if(externalOrders[om.floor][om.btn].assignedID != om.assignedID){
-                            writeln("  confirmedOrder.assignedID != externalOrders.assignedID!\n",
-                                    "    ", om, "\n    ", externalOrders[om.floor][om.btn]);
+                        final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
+                        case inactive:
+                            if(om.msgOriginID != thisPeerID){                           
+                                externalOrders[om.floor][om.btn].assignedID = om.assignedID;
+                                externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                                goto case pending;
+                            } else {
+                                break;
+                            }
+                        case pending:
+                            externalOrders[om.floor][om.btn].status = active;
+
+                            elevator.SetLight(om.floor, cast(Light)om.btn, true);
+
+                            if( !getThisState.moving  &&
+                                getThisState.floor == om.floor  &&
+                                getThisState.shouldStop(om.floor))
+                            {
+                                timerEventTid.send(thisTid, doorClose, doorOpenTime);
+                                clearOrders(om.floor);
+                            }
+                            if(getThisState.isIdle){
+                                timerEventTid.send(thisTid, doorClose, 0.seconds);
+                            }
+                            break;
+                        case active:
+                            if(externalOrders[om.floor][om.btn].assignedID != om.assignedID){
+                                //  ok: Order is already "in the system", but there is a disagreement on who is taking it (information mismatch).
+                                writeln("Warning: confirmedOrder.assignedID is not the same as externalOrders.assignedID\n",
+                                        "    ", om, "\n    ", externalOrders[om.floor][om.btn]);
+                            } else {
+                                //  ok: Order is already "in the system"
+                            }
+                            break;
                         }
-                        elevator.SetLight(om.floor, cast(Light)om.btn, true);
-                        
-                        if( !getThisState.moving  &&
-                            getThisState.floor == om.floor  &&
-                            getThisState.shouldStop(om.floor))
-                        {
-                            timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                            clearOrders(om.floor);
-                        } else {
-                            timerEventTid.send(thisTid, doorClose, 0.seconds);
-                        }
-                        
                         break;
 
                     case completedOrder:
-                        // remove from externalOrders
-                        externalOrders[om.floor][om.btn].pending = false;
-                        externalOrders[om.floor][om.btn].active = false;
+                        //  No reason to _not_ clear the order, even if it isn't active
+                        //      This may mean that an unassigned elevator clears an order, which is ok.
+                        externalOrders[om.floor][om.btn].status = ExternalOrder.Status.inactive;
                         externalOrders[om.floor][om.btn].assignedID = 0;
                         externalOrders[om.floor][om.btn].hasConfirmed.clear;
-                        // set light off
                         elevator.SetLight(om.floor, cast(Light)om.btn, false);
                         break;
                     }
@@ -261,13 +304,30 @@ try {
                     if(srr.askerID == thisPeerID){
                         return;
                     }
-                    networkTid.send(
-                        StateRestoreInfo(
-                            srr.askerID,
-                            states.get(srr.askerID, ElevatorState.init).to!string
-                        )
-                        .to!string
-                    );
+                    networkTid.send(wrappedState);
+                    if(srr.askerID in states){
+                        networkTid.send(
+                            StateRestoreInfo(
+                                srr.askerID,
+                                states[srr.askerID].to!string
+                            )
+                            .to!string
+                        );
+                    }
+                    foreach(floor, row; externalOrders){
+                        foreach(btn, order; row){
+                            if(order.status == ExternalOrder.Status.active){
+                                networkTid.send(OrderMsg(
+                                    order.assignedID,
+                                    floor.to!int,
+                                    cast(ButtonType)btn,
+                                    thisPeerID,
+                                    thisPeerID,
+                                    MessageType.confirmedOrder
+                                ).to!string);
+                            }
+                        }
+                    }
                 },
 
                 // --- FROM TIMER --- //
@@ -307,15 +367,16 @@ try {
                                 MessageType.newOrder
                             ).to!string);
                             +++++/
-                            writeln("Acknowledgement of order ", s.parse!int, " ", s.parse!ButtonType, "failed!\n",
-                                    "  Expected: No light is turned on. Press the button again...");
+                            writeln("Warning: Acknowledgement of order ", s.parse!int, " ", s.parse!ButtonType, "failed!\n",
+                                    "    Expected behaviour: Light is not turned on. \n",
+                                    "    Press the button again to retry...");
                             return;
                         }
                         // --- Order reassignment & data integrity checker --- //
                         if(s == reassignUnlinkedOrders){
                             foreach(floor, row; externalOrders){
                                 foreach(btn, order; row){
-                                    if(order.active  &&  !alivePeers.canFind(order.assignedID)){
+                                    if(order.status == ExternalOrder.Status.active  &&  !alivePeers.canFind(order.assignedID)){
                                         networkTid.send(OrderMsg(
                                             states
                                                 .filterAlive(alivePeers)
@@ -359,42 +420,42 @@ try {
     GeneralizedElevatorState getThisState(){
         return states[thisPeerID].generalize(thisPeerID, externalOrders);
     }
-    
+
     void clearOrders(int floor){
         states[thisPeerID].internalOrders[floor] = false;
         elevator.SetLight(floor, Light.COMMAND, false);
         final switch(states[thisPeerID].dirn) with(MotorDirection) {
         case UP:
-            if(externalOrders[floor][UP].active){
+            if(externalOrders[floor][UP].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
             }
-            if(!getThisState.ordersAbove  &&  externalOrders[floor][DOWN].active){
+            if(!getThisState.ordersAbove  &&  externalOrders[floor][DOWN].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
             }
             break;
         case DOWN:
-            if(externalOrders[floor][DOWN].active){
+            if(externalOrders[floor][DOWN].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
             }
-            if(!getThisState.ordersBelow  &&  externalOrders[floor][UP].active){
+            if(!getThisState.ordersBelow  &&  externalOrders[floor][UP].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
             }
             break;
         case STOP:
-            if(externalOrders[floor][UP].active){
+            if(externalOrders[floor][UP].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.UP, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
             }
-            if(externalOrders[floor][DOWN].active){
+            if(externalOrders[floor][DOWN].status == ExternalOrder.Status.active){
                 auto om = OrderMsg(thisPeerID, floor, ButtonType.DOWN, 0, thisPeerID, MessageType.completedOrder);
                 thisTid.send(om);
                 networkTid.send(om.to!string);
@@ -402,8 +463,8 @@ try {
             break;
         }
     }
-    
-    
+
+
     /// ----- FREE FUNCTIONS ----- ///
 
     ElevatorState[ubyte] filterAlive(ElevatorState[ubyte] states, ubyte[] alivePeers){
@@ -423,7 +484,7 @@ try {
             .map!(ordersAtFloor =>
                 ordersAtFloor
                 .map!(order =>
-                    order.active  &&
+                    order.status == ExternalOrder.Status.active  &&
                     order.assignedID == ID
                 )
                 .array
@@ -488,7 +549,7 @@ try {
     bool ordersBelow(GeneralizedElevatorState state){
         return state.orders[0..state.floor].map!any.any;
     }
-  
+
     MotorDirection chooseDirn(GeneralizedElevatorState state){
         if(!state.hasOrders){
             return MotorDirection.STOP;
@@ -529,8 +590,8 @@ try {
         return e.maxFloor - e.minFloor + 1;
     }
 
-    
-    
+
+
     ElevatorState uninitializedElevatorState(int numFloors){
         return ElevatorState(
             -1,
@@ -539,11 +600,11 @@ try {
             new bool[](numFloors)
         );
     }
-  
+
     string ack(int floor, ButtonType btn){
         return "ack" ~ floor.to!string ~ btn.to!string;
     }
-    
+
 
 }
 

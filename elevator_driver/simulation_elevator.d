@@ -52,7 +52,13 @@ public:
             prevFloor = uniform(minFloor, maxFloor);
             currFloor = dice(80,20) ? -1 : prevFloor;
             nextFloor = prevFloor;
-            prevDir = dice(50,50) ? MotorDirection.DOWN : MotorDirection.UP;
+            if(currFloor == -1  &&  prevFloor == minFloor){
+                prevDir = MotorDirection.UP;
+            } else if(currFloor == -1  &&  prevFloor == maxFloor){
+                prevDir = MotorDirection.DOWN;
+            } else {
+                prevDir = dice(50,50) ? MotorDirection.DOWN : MotorDirection.UP;
+            }
             currDir = MotorDirection.STOP;
             break;
         case no:
@@ -179,21 +185,13 @@ private {
 
 
 void thr_simulationLoop(){
-    scope(exit){ writeln(__FUNCTION__, " died"); }
+    scope(exit){
+        writeln(__FUNCTION__, " died");
+        writeln("Debug info:\nprevDir=", prevDir, "\ncurrDir=", currDir,
+                "\nprevFloor=", prevFloor, "\ncurrFloor=", currFloor,
+                "\nnextFloor=", nextFloor);
+    }
 
-     /+
-    events:
-        movements
-            arr#  : arrive at floor #
-                if arr-1 or arr5: crash
-                set currFloor to #
-                set prevFloor to #
-            dep#  : depart floor #
-                set currFloor to -1
-        release buttons:
-            btn%# : button %=u/d/c at floor #
-            stp   : stop
-    +/
 
     // --- IMPORTS --- //
 
@@ -339,14 +337,14 @@ void thr_simulationLoop(){
 
     // Create and spawn second window
     string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];
-    std.file.write(path~"secondWindow1.d", secondWindowProgram);
+    std.file.write(path~"secondWindow.d", secondWindowProgram);
     version(Windows){
-        std.process.spawnShell(("start \"\" rdmd -w -g \"" ~ path ~ "secondWindow1.d\""));
+        std.process.spawnShell(("start \"\" rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
     } else version(linux){
-        std.process.spawnShell(("mate-terminal -x rdmd -w -g \"" ~ path ~ "secondWindow1.d\""));
+        std.process.spawnShell(("mate-terminal -x rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
     }
     Thread.sleep(1.seconds);
-    std.file.remove(path~"secondWindow1.d");
+    std.file.remove(path~"secondWindow.d");
 
 
     // --- LOOP --- //
@@ -354,18 +352,15 @@ void thr_simulationLoop(){
     while(1){
         receive(
             (MotorDirection m){
-                if(currDir != MotorDirection.STOP){
-                    prevDir = currDir;
-                }
-                currDir = m;
                 //writeln("received MotorDirChange: prevDir=", prevDir, " currDir=", currDir,
                 //                                " prevFloor=", prevFloor, " currFloor=", currFloor);
-
-                if(currDir == MotorDirection.UP){
+                currDir = m;
+                final switch(currDir) with(MotorDirection){
+                case UP:
+                    prevDir = currDir;
                     if(currFloor != -1){
                         timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
-                    }
-                    if(currFloor == -1){
+                    } else {
                         if(prevDir == MotorDirection.UP){
                             timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTime);
                             nextFloor = prevFloor+1;
@@ -374,12 +369,12 @@ void thr_simulationLoop(){
                             timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTime);
                         }
                     }
-                }
-                if(currDir == MotorDirection.DOWN){
+                    break;
+                case DOWN:
+                    prevDir = currDir;
                     if(currFloor != -1){
                         timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
-                    }
-                    if(currFloor == -1){
+                    } else {
                         if(prevDir == MotorDirection.UP){
                             timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTime);
                         }
@@ -388,6 +383,9 @@ void thr_simulationLoop(){
                             nextFloor = prevFloor-1;
                         }
                     }
+                    break;
+                case STOP:
+                    break;
                 }
             },
             (Tid t, string s){
@@ -519,6 +517,8 @@ import  std.stdio,
         std.c.process;
 
 void main(){
+    import core.thread;
+    scope(exit) Thread.sleep(5.seconds);
     scope(exit) writeln(__FUNCTION__, " died");
 
     auto    addr    = new InternetAddress("localhost", 40000);

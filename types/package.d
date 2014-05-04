@@ -20,11 +20,16 @@ struct ElevatorStateWrapper {
     mixin(genConstructor!(typeof(this)));
 }
 struct ExternalOrder {
-    bool            pending;
-    bool            active;
+    enum Status {
+        inactive,
+        pending,
+        active
+    }
+    Status          status;
     ubyte           assignedID;
     ubyte[]         hasConfirmed;
 }
+
 struct GeneralizedElevatorState {
     import elevator_driver.i_elevator;
     

@@ -16,14 +16,7 @@ template stringToStructTranslator_thr(T...){
                 (Tid discard, string s){
                     foreach(t; T){
                         static if(is(t == struct)){ 
-                            /+static if(!std.traits.hasLocalAliasing!t  &&  is(typeof(__traits(getMember, t, "content")) == string)){
-                                mixin(
-                    "if(s.skipOver(\"" ~ t.stringof ~ "(\\\"\")){
-                        ownerTid.send(" ~ t.stringof ~ "(s));
-                        return;
-                    }"
-                                );
-                            } else+/ static if(!std.traits.hasLocalAliasing!t){
+                            static if(!std.traits.hasLocalAliasing!t){
                                 mixin(
                     "if(s.startsWith(\"" ~ t.stringof ~ "(\")){
                         ownerTid.send(" ~ t.stringof ~ "(s));

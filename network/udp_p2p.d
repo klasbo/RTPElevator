@@ -11,10 +11,16 @@ import  core.thread,
 
 import  util.threeway_spawn_mixin;
 
+/+
+    TODO:
+        version(none)'d functionality for allowing fake/mock thisPeerID should to be parameterized
++/
 
 public {
     static this(){
-        localIP     = new TcpSocket(new InternetAddress("www.google.com", 80)).localAddress.toAddrString;
+        auto sock   = new TcpSocket(new InternetAddress("www.google.com", 80));
+        localIP     = sock.localAddress.toAddrString;
+        sock.close;
         broadcastIP = localIP[0..localIP.lastIndexOf(".")+1] ~ "255";
         _thisPeerID = localIP[localIP.lastIndexOf(".")+1..$].to!ubyte;
     }
@@ -27,6 +33,7 @@ public {
     
     ubyte thisPeerID(){
         return _thisPeerID;
+        version(none) return (_thisPeerID + 1).to!ubyte;
     }
 
     struct peerListUpdate {
@@ -53,8 +60,6 @@ private {
     struct msgToNetwork {
         string msg;
     }
-    Tid[string] tids;
-
     struct initDone {}
 
 
@@ -70,12 +75,6 @@ private {
                 "thread:msg_recv_tid        msg_recv_thr"   ],
             false
         ));
-
-        //tids["iAmAlive_send"]   = spawnLinked( &iAmAlive_send_thr );    receiveOnly!(initDone);
-        //tids["iAmAlive_recv"]   = spawnLinked( &iAmAlive_recv_thr );    receiveOnly!(initDone);
-        //tids["msg_send"]        = spawnLinked( &msg_send_thr );         receiveOnly!(initDone);
-        //tids["msg_recv"]        = spawnLinked( &msg_recv_thr );         receiveOnly!(initDone);
-
 
         ownerTid.send(initDone());
         while(true){
@@ -109,10 +108,10 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
-        //ownerTid.send(initDone());
         mixin(reciprocate3way(""));
         while(true){
             sock.sendTo("!", addr);
+            version(none) sock.sendTo([thisPeerID], addr);
             Thread.sleep(iAmAliveSendInterval);
         }
 
@@ -134,13 +133,13 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, iAmAliveTimeout);
         sock.bind(addr);
 
-        //ownerTid.send(initDone());
         mixin(reciprocate3way(""));
         while(true){
             listHasChanges  = false;
             remoteAddr      = new UnknownAddress;
             sock.receiveFrom(buf, remoteAddr);
             addrLastByte    = remoteAddr.addrStringLastByte;
+            version(none) addrLastByte    = buf[0];
 
             if(addrLastByte != 0){
                 if(addrLastByte !in lastSeen){
@@ -171,7 +170,6 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
-        //ownerTid.send(initDone());
         mixin(reciprocate3way(""));
         while(true){
             receive(
@@ -197,7 +195,7 @@ private {
         sock.bind(addr);
 
         import std.algorithm : strip;
-        //ownerTid.send(initDone());
+        
         mixin(reciprocate3way(""));
         while(sock.receiveFrom(buf, remoteAddr) > 0){
             if(recvMsgsFromSelf || remoteAddr.toAddrString != localIP){
