@@ -1,13 +1,14 @@
-module  types;
+module event_loop.types;
 
-import  std.typecons;
 import  util.struct_constructor_mixin;
+
+public import network.udp_p2p : ID_t;
+public import elevator_driver.i_elevator : ButtonType, MotorDirection;
 
 struct initDone {}
 
+
 struct ElevatorState {
-    import elevator_driver.i_elevator;
-    
     int             floor;
     MotorDirection  dirn;
     bool            moving;
@@ -16,7 +17,7 @@ struct ElevatorState {
 }
 struct ElevatorStateWrapper {
     string          content;
-    ubyte           belongsTo;
+    ID_t            belongsTo;
     mixin(genConstructor!(typeof(this)));
 }
 struct ExternalOrder {
@@ -26,33 +27,29 @@ struct ExternalOrder {
         active
     }
     Status          status;
-    ubyte           assignedID;
-    ubyte[]         hasConfirmed;
+    ID_t            assignedID;
+    ID_t[]          hasConfirmed;
 }
 
 struct GeneralizedElevatorState {
-    import elevator_driver.i_elevator;
-    
     int             floor;
     MotorDirection  dirn;
     bool            moving;
     bool[][]        orders;
-    ubyte           ID;
+    ID_t            ID;
 }
 
 struct OrderMsg {
-    import elevator_driver.i_elevator;
-    
     // order description
-    ubyte           assignedID;
+    ID_t            assignedID;
     int             floor;
     ButtonType      btn;
-    
+
     // meta
-    ubyte           orderOriginID;
-    ubyte           msgOriginID;
+    ID_t            orderOriginID;
+    ID_t            msgOriginID;
     MessageType     msgType;
-    
+
     mixin(genConstructor!(typeof(this)));
 }
 enum MessageType {
@@ -63,21 +60,11 @@ enum MessageType {
 }
 
 struct StateRestoreRequest {
-    ubyte           askerID;
+    ID_t            askerID;
     mixin(genConstructor!(typeof(this)));
 }
 struct StateRestoreInfo {
-    ubyte           belongsTo;
+    ID_t            belongsTo;
     string          stateString;
     mixin(genConstructor!(typeof(this)));
 }
-
-enum {
-    UP,
-    DOWN
-}
-
-
-
-
-

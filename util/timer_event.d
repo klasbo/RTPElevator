@@ -45,6 +45,7 @@ try{
     Event[]     events;
     Duration    timeUntilNextEvent  = 1.hours;
     Duration    eventMinimumPeriod  = 5.msecs;
+    bool        isDone              = false;
 
 
     void AddEvent(Tid owner, string eventName, SysTime timeOfEvent, Duration period, int type){
@@ -74,33 +75,43 @@ try{
     }
 
     while(true){
-
         receiveTimeout( timeUntilNextEvent,
             // in [time] timeunits (implicit oneshot)
-           (Tid owner, string eventName, Duration time){
-               AddEvent(owner, eventName, Clock.currTime + time, 0.msecs, oneshot);
-           },
-           // in [time] timeunits, with type
-           (Tid owner, string eventName, Duration time, int type){
-               AddEvent(owner, eventName, Clock.currTime + time, time, type);
-           },
-           // at [time] (implicit oneshot)
-           (Tid owner, string eventName, SysTime time){
-                AddEvent(owner, eventName, time, 0.msecs, oneshot);
-           },
-           // cancel event
-           (Tid owner, string eventName, int cancel){
-               foreach(idx, event; events){
-                   if(event.name == eventName){
-                       events = events.remove(idx);
-                       break;
-                   }
-               }
-           },
-           (Variant v){
-               writeln(__FUNCTION__,":",__LINE__," Unhandled input: ", v);
-           }
+            (Tid owner, string eventName, Duration time){
+                AddEvent(owner, eventName, Clock.currTime + time, 0.msecs, oneshot);
+            },
+            // in [time] timeunits, with type
+            (Tid owner, string eventName, Duration time, int type){
+                AddEvent(owner, eventName, Clock.currTime + time, time, type);
+            },
+            // at [time] (implicit oneshot)
+            (Tid owner, string eventName, SysTime time){
+                    AddEvent(owner, eventName, time, 0.msecs, oneshot);
+            },
+            // cancel event
+            (Tid owner, string eventName, int cancel){
+                foreach(idx, event; events){
+                    if(owner == event.owner  &&  eventName == event.name){
+                        events = events.remove(idx);
+                        break;
+                    }
+                }
+            },
+            (OwnerTerminated ot){
+                isDone = true;
+            },
+            (LinkTerminated lt){
+                isDone = true;
+            },
+            (Variant v){
+                writeln(__FUNCTION__,":",__LINE__," Unhandled input: ", v);
+            }
         );
+        
+        
+        if(isDone){
+            return;
+        }
 
 
         // Go through all events. If one has passed, send back event & update events list

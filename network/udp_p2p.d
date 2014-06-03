@@ -2,22 +2,21 @@ module network.udp_p2p;
 
 import  core.thread,
         std.algorithm,
+        std.bitmanip,
         std.concurrency,
         std.conv,
         std.datetime,
+        std.file,
+        std.getopt,
         std.socket,
         std.stdio,
         std.string;
 
 import  util.threeway_spawn_mixin;
 
-/+
-    TODO:
-        version(none)'d functionality for allowing fake/mock thisPeerID should to be parameterized
-+/
 
 public {
-    static this(){
+    shared static this(){
         auto sock   = new TcpSocket(new InternetAddress("www.google.com", 80));
         localIP     = sock.localAddress.toAddrString;
         sock.close;
@@ -30,29 +29,48 @@ public {
         receive((initDone id){});
         return t;
     }
-    
-    ubyte thisPeerID(){
-        return _thisPeerID;
-        version(none) return (_thisPeerID + 1).to!ubyte;
+
+    ID_t thisPeerID(){
+        return (_thisPeerID + IDOffset);
     }
 
     struct peerListUpdate {
-        immutable(ubyte)[] peers;
+        immutable(ID_t)[] peers;
         alias peers this;
+    }
+
+    alias ID_t = int;
+}
+
+shared static this(){
+    string[] configContents;
+    try {
+        configContents = readText("ElevatorConfig.con").split;
+        getopt( configContents,
+            std.getopt.config.passThrough,
+            "network_IDOffset",                 &IDOffset,
+            "network_iAmAliveSendInterval_ms",  &iAmAliveSendInterval_ms,
+            "network_iAmAliveTimeout_ms",       &iAmAliveTimeout_ms,
+            "network_iAmAlivePort",             &iAmAlivePort,
+            "network_msgPort",                  &msgPort
+        );
+    } catch(Exception e){
+        writeln("Unable to load network config: ", e.msg);
     }
 }
 
-
 private {
-    string  localIP;
-    string  broadcastIP;
-    ubyte   _thisPeerID;
-    enum    msg_bufsize             = 1024;
-    auto    iAmAliveSendInterval    = 300.msecs;
-    auto    iAmAliveTimeout         = 1.seconds;
-    ushort  iAmAlivePort            = 22222;
-    ushort  msgPort                 = 22223;
-    bool    recvMsgsFromSelf        = true;
+    shared string       localIP;
+    shared string       broadcastIP;
+    shared ubyte        _thisPeerID;
+    shared ID_t         IDOffset                = 0;
+    shared uint         iAmAliveSendInterval_ms = 300;
+    shared uint         iAmAliveTimeout_ms      = 1000;
+    shared ushort       iAmAlivePort            = 22222;
+    shared ushort       msgPort                 = 22223;
+
+    enum                msgBufsize              = 1024;
+    enum                aliveBufsize            = ID_t.sizeof;
 
     struct msgFromNetwork {
         string msg;
@@ -67,7 +85,7 @@ private {
 
     void udp_p2p(Tid receiver){
         scope(exit) writeln(__FUNCTION__, " died");
-        
+
         mixin(spawn3way(
             [   "thread:iAmAlive_send_tid   iAmAlive_send_thr",
                 "thread:iAmAlive_recv_tid   iAmAlive_recv_thr",
@@ -89,7 +107,7 @@ private {
                     receiver.send(thisTid, plu);
                 },
                 (LinkTerminated lt){
-                    
+
                 },
                 (Variant v){
                     writeln(__FUNCTION__, " received unknown type ", v);
@@ -102,31 +120,38 @@ private {
 
     void iAmAlive_send_thr(){
         scope(exit) writeln(__FUNCTION__, " died");
-        auto    addr    = new InternetAddress(broadcastIP, iAmAlivePort);
-        auto    sock    = new UdpSocket();
+        try {
+
+        auto    addr                    = new InternetAddress(broadcastIP, iAmAlivePort);
+        auto    sock                    = new UdpSocket();
+        ubyte[] ID                      = new ubyte[](aliveBufsize);
+        auto    iAmAliveSendInterval    = iAmAliveSendInterval_ms.msecs;
+        ID.write!(ID_t)(thisPeerID, 0);
 
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
         mixin(reciprocate3way(""));
         while(true){
-            sock.sendTo("!", addr);
-            version(none) sock.sendTo([thisPeerID], addr);
+            sock.sendTo(ID, addr);
             Thread.sleep(iAmAliveSendInterval);
         }
-
+        } catch(Throwable t){ t.writeln; throw t; }
     }
 
     void iAmAlive_recv_thr(){
         scope(exit) writeln(__FUNCTION__, " died");
+        try {
 
-        auto    addr    = new InternetAddress(iAmAlivePort);
-        auto    sock    = new UdpSocket();
-        ubyte[2]            buf;
-        SysTime[ubyte]      lastSeen;
-        Address             remoteAddr;
-        bool                listHasChanges;
-        ubyte               addrLastByte;
+        auto    addr                    = new InternetAddress(iAmAlivePort);
+        auto    sock                    = new UdpSocket();
+        auto    iAmAliveTimeout         = iAmAliveTimeout_ms.msecs;
+
+        ID_t            ID;
+        ubyte[]         buf             = new ubyte[](aliveBufsize);
+        SysTime[ID_t]   lastSeen;
+        bool            listHasChanges;
+
 
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
@@ -136,16 +161,16 @@ private {
         mixin(reciprocate3way(""));
         while(true){
             listHasChanges  = false;
-            remoteAddr      = new UnknownAddress;
-            sock.receiveFrom(buf, remoteAddr);
-            addrLastByte    = remoteAddr.addrStringLastByte;
-            version(none) addrLastByte    = buf[0];
+            buf[]           = 0;
 
-            if(addrLastByte != 0){
-                if(addrLastByte !in lastSeen){
+            sock.receiveFrom(buf);
+            ID = buf.peek!ID_t;
+
+            if(ID != 0){
+                if(ID !in lastSeen){
                     listHasChanges = true;
                 }
-                lastSeen[addrLastByte] = Clock.currTime;
+                lastSeen[ID] = Clock.currTime;
             }
 
             foreach(k, v; lastSeen){
@@ -159,10 +184,12 @@ private {
                 ownerTid.send(peerListUpdate(lastSeen.keys.idup));
             }
         }
+        } catch(Throwable t){ t.writeln; throw t; }
     }
 
     void msg_send_thr(){
         scope(exit) writeln(__FUNCTION__, " died");
+        try {
 
         auto    addr    = new InternetAddress(broadcastIP, msgPort);
         auto    sock    = new UdpSocket();
@@ -174,35 +201,33 @@ private {
         while(true){
             receive(
                 (msgToNetwork mtn){
-                    assert(mtn.msg.length < msg_bufsize,
-                        "Cannot send message larger than the buffer size (" ~ msg_bufsize.to!string ~ ")");
+                    assert(mtn.msg.length < msgBufsize,
+                        "Cannot send message larger than the buffer size (" ~ mtn.msg.length.to!string ~ " > " ~ msgBufsize.to!string ~ ")");
                     sock.sendTo(mtn.msg, addr);
                 }
             );
         }
+        } catch(Throwable t){ t.writeln; throw t; }
     }
 
     void msg_recv_thr(){
         scope(exit) writeln(__FUNCTION__, " died");
+        try {
 
         auto    addr    = new InternetAddress(msgPort);
         auto    sock    = new UdpSocket();
-        ubyte[msg_bufsize]  buf;
-        Address             remoteAddr;
+        ubyte[1024] buf;
 
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
         sock.bind(addr);
 
-        import std.algorithm : strip;
-        
         mixin(reciprocate3way(""));
-        while(sock.receiveFrom(buf, remoteAddr) > 0){
-            if(recvMsgsFromSelf || remoteAddr.toAddrString != localIP){
-                ownerTid.send( msgFromNetwork( (cast(string)buf).strip('\0').dup ) );
-            }
+        while(sock.receiveFrom(buf) > 0){
+            ownerTid.send( msgFromNetwork( (cast(string)buf).strip('\0').dup ) );
             buf.clear;
         }
+        } catch(Throwable t){ t.writeln; throw t; }
     }
 
 

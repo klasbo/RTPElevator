@@ -5,8 +5,7 @@ import  std.algorithm,
         std.stdio,
         std.conv;
 
-import  elevator_driver,
-        types;
+import  elevator_driver;
 
 
 void elevator_driver_test(){

@@ -1,5 +1,5 @@
 cls;
-$res = dmd -w -g -ofRTPElevator (gci -r -i *.d | ? {$_ -notmatch 'lint' -and $_ -notmatch 'workbench'});
+$res = dmd -w -g -ofRTPElevator (gci -r -i *.d | ? {$_ -notmatch 'workbench'});
 if ($LASTEXITCODE -eq 0){
     try {
         "Running"

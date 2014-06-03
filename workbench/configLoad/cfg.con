@@ -1,0 +1,7 @@
+cfg
+
+--main_int      5
+--main_bool     true
+
+--module_string "hi"
+--module_double 3.4

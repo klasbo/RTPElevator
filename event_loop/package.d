@@ -1,16 +1,19 @@
+module event_loop;
+
 import  std.algorithm,
-        std.array,
         std.concurrency,
         std.conv,
         std.datetime,
+        std.file,
+        std.getopt,
         std.random,
         std.range,
         std.stdio;
 
-import  best_fit,
-        elevator_driver,
+import  elevator_driver,
+        event_loop.freeFuncs,
+        event_loop.types,
         network.udp_p2p,
-        types,
         util.string_to_struct_translator,
         util.timer_event;
 
@@ -18,11 +21,28 @@ import  best_fit,
 public {
     Tid eventLoop_start(){
         Tid t = spawn( &eventLoop );
-        receive((types.initDone id){});
+        receive((event_loop.types.initDone id){});
         return t;
     }
 }
 
+
+shared static this(){
+    string[] configContents;
+    try {
+        configContents = readText("ElevatorConfig.con").split;
+        getopt( configContents,
+            std.getopt.config.passThrough,
+            "eventLoop_elevatorType",           &elevatorType,
+            "eventLoop_doorOpenTime_ms",        &doorOpenTime_ms,
+            "eventLoop_ackTimeout_ms",          &ackTimeout_ms,
+            "eventLoop_reassignMinTime_s",      &reassignMinTime_s,
+            "eventLoop_reassignMaxTime_s",      &reassignMaxTime_s
+        );
+    } catch(Exception e){
+        writeln("Unable to load eventLoop config: ", e.msg);
+    }
+}
 
 
 
@@ -36,19 +56,25 @@ private {
     Elevator    elevator;
     Tid         elevatorEventsTid;
 
-
     /// ----- CONSTANTS ----- ///
-    auto        doorClose               = "doorClose";
-    auto        reassignUnlinkedOrders  = "reassignUnlinkedOrders";
-    auto        doorOpenTime            = 3.seconds;
-    auto        ackTimeout              = 50.msecs;
-
+    immutable   doorClose               = "doorClose";
+    immutable   reassignUnlinkedOrders  = "reassignUnlinkedOrders";
 
     /// ----- VARIABLES ----- ///
     ExternalOrder[][]       externalOrders;
-    ElevatorState[ubyte]    states;
-    ubyte[]                 alivePeers;
+    ElevatorState[ID_t]     states;
+    ID_t[]                  alivePeers;
 
+    /// ----- CONFIG ----- ///
+    shared uint     reassignMinTime_s   = 3;
+    shared uint     reassignMaxTime_s   = 7;
+    shared uint     doorOpenTime_ms     = 3000;
+    shared uint     ackTimeout_ms       = 50;
+    enum ElevatorType {
+        simulation,
+        comedi
+    }
+    shared          elevatorType        = ElevatorType.simulation;
 
 
 
@@ -56,7 +82,8 @@ private {
 
     void eventLoop(){
         scope(exit){ writeln(__FUNCTION__, " has died"); }
-try {
+        try {
+
         timerEventTid                   = spawn( &timerEvent_thr );
         stringToStructTranslatorTid     = spawn( &stringToStructTranslator_thr!(
             ElevatorStateWrapper,
@@ -65,26 +92,35 @@ try {
             StateRestoreInfo
         ) );
         networkTid                      = udp_p2p_start(stringToStructTranslatorTid);
-        elevator                        = new SimulationElevator(RandomStart.yes);
-//        elevator                        = new ComediElevator;
+        final switch(elevatorType) with(ElevatorType){
+        case simulation:
+            elevator                    = new SimulationElevator(RandomStart.yes); break;
+        case comedi:
+            elevator                    = new ComediElevator; break;
+        }
         elevatorEventsTid               = elevatorEvents_start(elevator);
-
 
         externalOrders                  = new ExternalOrder[][](elevator.numFloors, 2);
         states[thisPeerID]              = uninitializedElevatorState(elevator.numFloors);
 
 
+        auto    doorOpenTime    = doorOpenTime_ms.msecs;
+        auto    ackTimeout      = ackTimeout_ms.msecs;
+
+
+
+
+
+
+        writeln("Event loop started");
 
         if(elevator.ReadFloorSensor == -1){
             elevator.SetMotorDirection(MotorDirection.DOWN);
         }
 
         networkTid.send(StateRestoreRequest(thisPeerID).to!string);
-        timerEventTid.send(thisTid, reassignUnlinkedOrders, 5.seconds);
-        ownerTid.send(types.initDone());
-
-
-        writeln("Event loop started");
+        timerEventTid.send(thisTid, reassignUnlinkedOrders, reassignMaxTime_s.seconds);
+        ownerTid.send(event_loop.types.initDone());
         while(true){
             receive(
                 (StateRestoreInfo sri){
@@ -245,7 +281,7 @@ try {
                     case confirmedOrder:
                         final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
                         case inactive:
-                            if(om.msgOriginID != thisPeerID){                           
+                            if(om.msgOriginID != thisPeerID){
                                 externalOrders[om.floor][om.btn].assignedID = om.assignedID;
                                 externalOrders[om.floor][om.btn].hasConfirmed.clear;
                                 goto case pending;
@@ -392,7 +428,7 @@ try {
                                     }
                                 }
                             }
-                            timerEventTid.send(thisTid, reassignUnlinkedOrders, uniform(3,8).seconds);
+                            timerEventTid.send(thisTid, reassignUnlinkedOrders, uniform(reassignMinTime_s,reassignMaxTime_s).seconds);
                             return;
                         }
                     }
@@ -402,7 +438,7 @@ try {
                 }
             );
         }
-} catch(Throwable t){ t.writeln; throw t; }
+        } catch(Throwable t){ t.writeln; throw t; }
     }
 
 
@@ -464,146 +500,6 @@ try {
         }
     }
 
-
-    /// ----- FREE FUNCTIONS ----- ///
-
-    ElevatorState[ubyte] filterAlive(ElevatorState[ubyte] states, ubyte[] alivePeers){
-        return
-        states.keys.zip(states.values)
-        .filter!(a => alivePeers.canFind(a[0]))
-        .assocArray;
-    }
-
-    GeneralizedElevatorState generalize(ElevatorState state, ubyte ID, ExternalOrder[][] externalOrders){
-        return GeneralizedElevatorState(
-            state.floor,
-            state.dirn,
-            state.moving,
-
-            externalOrders
-            .map!(ordersAtFloor =>
-                ordersAtFloor
-                .map!(order =>
-                    order.status == ExternalOrder.Status.active  &&
-                    order.assignedID == ID
-                )
-                .array
-            )
-            .zip(state.internalOrders)
-            .map!(a => a[0] ~ a[1])
-            .array,
-
-            ID
-        );
-    }
-
-    GeneralizedElevatorState[] generalize(ElevatorState[ubyte] states, ExternalOrder[][] externalOrders){
-        return
-        states.values.zip(states.keys)
-        .map!(a =>
-            a[0].generalize(a[1], externalOrders)
-        )
-        .array;
-    }
-
-    GeneralizedElevatorState[] augment(GeneralizedElevatorState[] states, btnPressEvent bpe){
-        // Uses CommaExpression.
-        bool[][] b;
-        return
-        states
-        .map!(a =>
-            GeneralizedElevatorState(
-                a.floor,
-                a.dirn,
-                a.moving,
-                ( b = a.orders.map!(a=>a.dup).array,
-                  b[bpe.floor][bpe.btn] = true,
-                  b),
-                a.ID
-            )
-        )
-        .array;
-    }
-
-    bool shouldStop(GeneralizedElevatorState state, int floor){
-        final switch(state.dirn) with(MotorDirection){
-        case UP:
-            return  !state.ordersAbove  ||
-                    state.floor == elevator.maxFloor  ||
-                    state.orders[floor][ButtonType.UP]  ||
-                    state.orders[floor][ButtonType.COMMAND];
-        case DOWN:
-            return  !state.ordersBelow  ||
-                    state.floor == elevator.minFloor  ||
-                    state.orders[floor][ButtonType.DOWN]  ||
-                    state.orders[floor][ButtonType.COMMAND];
-        case STOP:
-            return  true;
-        }
-    }
-
-    bool ordersAbove(GeneralizedElevatorState state){
-        return state.orders[state.floor+1..$].map!any.any;
-    }
-
-    bool ordersBelow(GeneralizedElevatorState state){
-        return state.orders[0..state.floor].map!any.any;
-    }
-
-    MotorDirection chooseDirn(GeneralizedElevatorState state){
-        if(!state.hasOrders){
-            return MotorDirection.STOP;
-        }
-        final switch(state.dirn) with(MotorDirection){
-        case UP:
-            if(state.ordersAbove  &&  state.floor != elevator.maxFloor){
-                return UP;
-            } else {
-                return DOWN;
-            }
-        case DOWN:
-            if(state.ordersBelow  &&  state.floor != elevator.minFloor){
-                return DOWN;
-            } else {
-                return UP;
-            }
-        case STOP:
-            if(state.ordersAbove){
-                return UP;
-            } else if(state.ordersBelow){
-                return DOWN;
-            } else {
-                return STOP;
-            }
-        }
-    }
-
-    bool isIdle(GeneralizedElevatorState state){
-        return !state.moving  &&  state.dirn == MotorDirection.STOP;
-    }
-
-    bool hasOrders(GeneralizedElevatorState state){
-        return state.orders.map!any.any;
-    }
-
-    int numFloors(Elevator e){
-        return e.maxFloor - e.minFloor + 1;
-    }
-
-
-
-    ElevatorState uninitializedElevatorState(int numFloors){
-        return ElevatorState(
-            -1,
-            MotorDirection.STOP,
-            false,
-            new bool[](numFloors)
-        );
-    }
-
-    string ack(int floor, ButtonType btn){
-        return "ack" ~ floor.to!string ~ btn.to!string;
-    }
 
 
 }

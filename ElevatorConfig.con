@@ -1,26 +1,3 @@
-import  std.file,
-        std.stdio,
-        std.concurrency;
-
-import  test.tcp_ms_test,
-        test.udp_p2p_test,
-        test.elevator_driver_test;        
-        
-import  elevator_driver;        
-
-import  event_loop;
-
-/+
-config: terminal window, or userShell?
-restart program if config does not exist
-
-+/
-
-
-shared static this(){
-    if(!"ElevatorConfig.con".exists){
-        std.file.write("ElevatorConfig.con", 
-q"EOS
 ElevatorConfig
 
 --eventLoop_elevatorType                    simulation
@@ -39,27 +16,10 @@ ElevatorConfig
 --simulationElevator_travelTime_ms          1500
 --simulationElevator_doorOpenTime_ms        650
 --simulationElevator_btnDepressedTime_ms    200
---simulationElevator_comPort                40000
+--simulationElevator_comPort                40020
 
 --comediElevator_motorSpeed                 500
 
 --elevatorDriver_pollRate_ms                10
 
---OS_linux_terminal                         $TERM
-EOS"
-        );
-    }
-}
-
-void main(){
-    //tcp_ms_test;
-    //udp_p2p_test;
-    //elevator_driver_test;
-    eventLoop_start;
-    
-    import core.thread;
-    while(true){ Thread.sleep(1.hours); }
-}
-
-
-
+--OS_linux_terminal                         mate-terminal

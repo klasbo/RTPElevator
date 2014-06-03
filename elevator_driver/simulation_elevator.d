@@ -6,6 +6,7 @@ import  core.thread,
         std.concurrency,
         std.conv,
         std.file,
+        std.getopt,
         std.process,
         std.socket,
         std.stdio,
@@ -13,31 +14,18 @@ import  core.thread,
 
 public import  elevator_driver.i_elevator;
 
-enum RandomStart {
-    yes,
-    no
-}
+import util.timer_event;
 
-static this(){
-    travelTime                  = 1500.msecs;
-    doorOpenTime                = 650.msecs;
-    btnDepressedTime            = 200.msecs;
-    addr                        = new InternetAddress("localhost", 40000);
-    sock                        = new UdpSocket();
-    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-}
+
 
 /**
 Visual representation of the elevator appears in a second window.
-    Uses UDP port 40000 to communicate between the two windows.
 
 Use QWE, SDF, ZXCV to control Up, Down, Command buttons.
 Use T for Stop button, G for obstruction switch.
 
 Windows: Keys react instantly.
 Linux: Press key followed by Enter.
-
-Linux: Spawns the window using mate-terminal.
 */
 class SimulationElevator : Elevator
 {
@@ -152,7 +140,31 @@ private:
 
 
 
+enum RandomStart {
+    yes,
+    no
+}
+
+
+shared static this(){
+    string[] configContents;
+    try {
+        configContents = readText("ElevatorConfig.con").split;
+        getopt( configContents,
+            std.getopt.config.passThrough,
+            "simulationElevator_travelTime_ms",         &travelTime_ms,
+            "simulationElevator_doorOpenTime_ms",       &doorOpenTime_ms,
+            "simulationElevator_btnDepressedTime_ms",   &btnDepressedTime_ms,
+            "simulationElevator_comPort",               &comPort,
+            "OS_linux_terminal",                        &linux_terminal
+        );
+    } catch(Exception e){
+        writeln("Unable to load simulationElevator config: ", e.msg);
+    }
+}
+
 private {
+
     // Elevator state
     shared int              currFloor;
     shared int              prevFloor;
@@ -176,7 +188,12 @@ private {
     InternetAddress         addr;
     Socket                  sock;
 
-    // Settings
+    // Config
+    shared uint             travelTime_ms           = 1500;
+    shared uint             doorOpenTime_ms         = 650;
+    shared uint             btnDepressedTime_ms     = 200;
+    shared ushort           comPort                 = 40000;
+    __gshared string        linux_terminal          = "$TERM";
     Duration                travelTime;
     Duration                doorOpenTime;
     Duration                btnDepressedTime;
@@ -191,14 +208,7 @@ void thr_simulationLoop(){
                 "\nprevFloor=", prevFloor, "\ncurrFloor=", currFloor,
                 "\nnextFloor=", nextFloor);
     }
-
-
-    // --- IMPORTS --- //
-
-    import util.timer_event;
-
-
-
+    try {
 
     // --- DECLARATIONS --- //
 
@@ -210,65 +220,59 @@ void thr_simulationLoop(){
     // --- FUNCTIONS --- //
 
     void handleTimerEvent(string s){
-        //writeln("handling timer event: ", s);
-        try {
-            switch(s[0..3]){
-                case "arr":
-                    if(currDir != MotorDirection.STOP){
-                        if(s[3] == '-'  || s[3] == '4'){
-                            throw new ElevatorCrash("\nELEVATOR HAS CRASHED: \"Arrived\" at a non-existent floor\n");
-                        }
-                        if(currDir == MotorDirection.UP    &&  (s[3]-'0').to!int < prevFloor){ return; }
-                        if(currDir == MotorDirection.DOWN  &&  (s[3]-'0').to!int > prevFloor){ return; }
-                        currFloor = prevFloor = (s[3]-'0').to!int;
-                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
-                        return;
+        switch(s[0..3]){
+            case "arr":
+                if(currDir != MotorDirection.STOP){
+                    if(s[3] == '-'  || s[3] == '4'){
+                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: \"Arrived\" at a non-existent floor\n");
                     }
-                    if(currDir == MotorDirection.STOP){
-                        // ignore, elevator stopped before it reached the floor
-                    }
+                    if(currDir == MotorDirection.UP    &&  (s[3]-'0').to!int < prevFloor){ return; }
+                    if(currDir == MotorDirection.DOWN  &&  (s[3]-'0').to!int > prevFloor){ return; }
+                    currFloor = prevFloor = (s[3]-'0').to!int;
+                    timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
                     return;
+                }
+                if(currDir == MotorDirection.STOP){
+                    // ignore, elevator stopped before it reached the floor
+                }
+                return;
 
-                case "dep":
-                    if(currDir == MotorDirection.UP){
-                        if(s[3] == '3'){
-                            throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed top floor going upward\n");
-                        }
-                        currFloor = -1;
-                        timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTime);
-                        nextFloor = prevFloor+1;
-                        return;
+            case "dep":
+                if(currDir == MotorDirection.UP){
+                    if(s[3] == '3'){
+                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed top floor going upward\n");
                     }
-                    if(currDir == MotorDirection.DOWN){
-                        if(s[3] == '0'){
-                            throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed bottom floor going downward\n");
-                        }
-                        currFloor = -1;
-                        timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTime);
-                        nextFloor = prevFloor-1;
-                        return;
+                    currFloor = -1;
+                    timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTime);
+                    nextFloor = prevFloor+1;
+                    return;
+                }
+                if(currDir == MotorDirection.DOWN){
+                    if(s[3] == '0'){
+                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed bottom floor going downward\n");
                     }
+                    currFloor = -1;
+                    timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTime);
+                    nextFloor = prevFloor-1;
                     return;
+                }
+                return;
 
-                case "btn":
-                    switch(s[3]){
-                        case 'u': buttons[(s[4]-'0').to!int][0] = false; return;
-                        case 'd': buttons[(s[4]-'0').to!int][1] = false; return;
-                        case 'c': buttons[(s[4]-'0').to!int][2] = false; return;
-                        default: writeln("Bad timer event received: unable to parse \"", s, "\""); return;
-                    }
+            case "btn":
+                switch(s[3]){
+                    case 'u': buttons[(s[4]-'0').to!int][0] = false; return;
+                    case 'd': buttons[(s[4]-'0').to!int][1] = false; return;
+                    case 'c': buttons[(s[4]-'0').to!int][2] = false; return;
+                    default: writeln("Bad timer event received: unable to parse \"", s, "\""); return;
+                }
 
-                case "stp":
-                    stopBtn = false;
-                    return;
+            case "stp":
+                stopBtn = false;
+                return;
 
-                default:
-                    writeln("Bad timer event received: unable to parse \"", s, "\"");
-                    return;
-            }
-        } catch(Throwable t){
-            if(typeid(t) == typeid(ElevatorCrash)){ throw t; }
-            writeln("Bad timer event received: unable to parse \"", s, "\"");
+            default:
+                writeln("Bad timer event received: unable to parse \"", s, "\"");
+                return;
         }
     }
 
@@ -334,6 +338,13 @@ void thr_simulationLoop(){
     timerEvent_thread           = spawn( &timerEvent_thr );
     controlPanelInput_thread    = spawn( &thr_controlPanelInput );
 
+    travelTime                  = travelTime_ms.msecs;
+    doorOpenTime                = doorOpenTime_ms.msecs;
+    btnDepressedTime            = btnDepressedTime_ms.msecs;
+    addr                        = new InternetAddress("localhost", comPort);
+    sock                        = new UdpSocket();
+    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+
 
     // Create and spawn second window
     string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];
@@ -341,7 +352,7 @@ void thr_simulationLoop(){
     version(Windows){
         std.process.spawnShell(("start \"\" rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
     } else version(linux){
-        std.process.spawnShell(("mate-terminal -x rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
+        std.process.spawnShell((linux_terminal ~ " -x rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
     }
     Thread.sleep(1.seconds);
     std.file.remove(path~"secondWindow.d");
@@ -352,12 +363,12 @@ void thr_simulationLoop(){
     while(1){
         receive(
             (MotorDirection m){
-                //writeln("received MotorDirChange: prevDir=", prevDir, " currDir=", currDir,
-                //                                " prevFloor=", prevFloor, " currFloor=", currFloor);
+                // writeln("received MotorDirChange: prevDir=", prevDir, " currDir=", currDir,
+                //                                 " prevFloor=", prevFloor, " currFloor=", currFloor,
+                //                                 " m=", m);
                 currDir = m;
                 final switch(currDir) with(MotorDirection){
                 case UP:
-                    prevDir = currDir;
                     if(currFloor != -1){
                         timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
                     } else {
@@ -369,9 +380,9 @@ void thr_simulationLoop(){
                             timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTime);
                         }
                     }
+                    prevDir = currDir;
                     break;
                 case DOWN:
-                    prevDir = currDir;
                     if(currFloor != -1){
                         timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
                     } else {
@@ -383,6 +394,7 @@ void thr_simulationLoop(){
                             nextFloor = prevFloor-1;
                         }
                     }
+                    prevDir = currDir;
                     break;
                 case STOP:
                     break;
@@ -401,6 +413,7 @@ void thr_simulationLoop(){
         );
         printState;
     }
+    } catch(Exception e){ e.writeln; throw e; }
 }
 
 void thr_controlPanelInput(){
@@ -510,18 +523,17 @@ struct stateUpdated {}
 
 
 
-auto secondWindowProgram =
-q"EOS
+string secondWindowProgram(){
+return
+"
 import  std.stdio,
         std.socket,
         std.c.process;
 
 void main(){
     import core.thread;
-    scope(exit) Thread.sleep(5.seconds);
-    scope(exit) writeln(__FUNCTION__, " died");
 
-    auto    addr    = new InternetAddress("localhost", 40000);
+    auto    addr    = new InternetAddress(\"localhost\", " ~ comPort.to!string ~ ");
     auto    sock    = new UdpSocket();
 
     ubyte[2048]     buf;
@@ -531,16 +543,17 @@ void main(){
 
     while(sock.receive(buf) > 0){
         version(Windows){
-            system("CLS");
+            system(\"CLS\");
         }
         version(linux){
-            system("clear");
+            system(\"clear\");
         }
         writeln(cast(string)buf);
         buf.clear;
     }
 }
-EOS";
+";
+};
 
 
 }

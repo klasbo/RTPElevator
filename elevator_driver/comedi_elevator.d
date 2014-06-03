@@ -3,24 +3,42 @@ module  elevator_driver.comedi_elevator;
 import  elevator_driver.channels,
         elevator_driver.io_di;
 public import elevator_driver.i_elevator;
-import  std.conv,
+import  std.array,
+        std.conv,
+        std.file,
+        std.getopt,
+        std.stdio,
         std.string;
 
 
-extern(C) void sigintHandler(int i){
-    io_write_analog(MOTOR, 2048);
-    import std.c.process;
-    exit(0);
-}
-
-static this(){
+shared static this(){
     version(linux){
         import core.sys.posix.signal;
         sigset(SIGINT, &sigintHandler);
     }
+    
+    
+    string[] configContents;
+    try {
+        configContents = readText("ElevatorConfig.con").split;
+        getopt( configContents,
+            std.getopt.config.passThrough,
+            "comediElevator_motorSpeed",    &comediElevator_motorSpeed
+        );
+    } catch(Exception e){
+        writeln("Unable to load comediElevator config: ", e.msg);
+    }
 }
 
-
+private {
+    extern(C) void sigintHandler(int i){
+        io_write_analog(MOTOR, 2048);
+        import std.c.process;
+        exit(0);
+    }
+    
+    shared int comediElevator_motorSpeed = 500;
+}
 
 /**
  * Thick wrapper for the Comedi Elevator
@@ -50,6 +68,7 @@ class ComediElevator : Elevator
             throw new Exception("Unable to initialize elevator hardware");
         }
         this.ResetLights;
+        motorSpeed = comediElevator_motorSpeed;
     }
     /**
      * Stops the elevator and destroys the ComediElevator instance
@@ -200,23 +219,14 @@ class ComediElevator : Elevator
 
                 case UP:
                     io_clear_bit(MOTORDIR);
-                    io_write_analog(MOTOR, 2048 + 2*MotorSpeed);
+                    io_write_analog(MOTOR, 2048 + 2*motorSpeed);
                     lastMotorDir = UP;
                     break;
 
                 case DOWN:
                     io_set_bit(MOTORDIR);
-                    io_write_analog(MOTOR, 2048 + 2*MotorSpeed);
+                    io_write_analog(MOTOR, 2048 + 2*motorSpeed);
                     lastMotorDir = DOWN;
-                    break;
-            }
-        }
-
-        /// Set various elevator options
-        void SetElevatorOption(ElevatorOption opt, int val){
-            final switch(opt) with(ElevatorOption){
-                case SPEED:
-                    MotorSpeed = coerce(val, minMotorSpeed.to!int, maxMotorSpeed.to!int);
                     break;
             }
         }
@@ -232,9 +242,7 @@ class ComediElevator : Elevator
         }
 
     private:
-        static immutable int   minMotorSpeed   = 0;
-        static immutable int   maxMotorSpeed   = 1000;
-        int             MotorSpeed      = 500;
+        int             motorSpeed      = 500;
         auto            lastMotorDir    = MotorDirection.STOP;  // Used in SetMotorDirection. Try to not use it anywhere else.
 
         int   _minFloor     = 0;
@@ -270,12 +278,6 @@ const int[][] lampChannelMatrix = [     // Make sure this aligns with the 'Light
     [LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3],
     [LIGHT_UP4, LIGHT_DOWN4, LIGHT_COMMAND4]];
 
-// Other
-///
-enum ElevatorOption {
-    ///
-    SPEED
-}
 
 
 

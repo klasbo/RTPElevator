@@ -11,10 +11,10 @@ import  core.thread,
         std.string,
         std.typecons;
 
-               
+
 debug = 2;
 
-        
+
 ushort  tcpPort                 = 27567;
 ushort  iAmAlivePort            = 27546;
 auto    iAmAliveSendInterval    = 300.msecs;
@@ -25,12 +25,16 @@ string  broadcastIP;
 ubyte   thisPeerID;
 
 public {
+    /**
+     *  WARNING: Does not remove TCP connections when they do not send iAmAlive on UDP
+     *      (This means that the connections will not be rebuilt after a disconnect)
+     */
     Tid tcp_ms_start(Tid receiver = thisTid){
         Tid t = spawn( &tcp_ms_hub, receiver );
         receive((initDone id){});
         return t;
     }
-    
+
     struct peerListUpdate {
         immutable(ubyte)[] peers;
         alias peers this;
@@ -50,7 +54,7 @@ private {
 
     void tcp_ms_hub(Tid receiver){
         debug(1) writeln(__FUNCTION__, " started");
-        
+
         Socket[ubyte]   socketMap;
         ubyte[]         currPeers;
         bool            isMaster;
@@ -58,7 +62,7 @@ private {
         ubyte           oldMasterID;
 
         void printConnInfo(){
-            debug(1) writeln("\n  Current socketMap: ", 
+            debug(1) writeln("\n  Current socketMap: ",
                     zip(socketMap.keys, socketMap.values.map!(a => a.isAlive)).map!(a => a[0].to!string ~ ":" ~ (a[1] ? "alive" : "dead")).array,
                     "\n  Current peers: ", currPeers,
                     "\n  This is master: ", isMaster );
@@ -72,7 +76,7 @@ private {
         accepter.send(initDone());
         aliveSender.send(initDone());
         aliveRecver.send(initDone());
-        
+
 
         ownerTid.send(initDone());
         while(true){
@@ -86,7 +90,7 @@ private {
                         conn.send(msg~"\0");
                     }
                 },
-                
+
                 // Received a message from the network
                 // Forward it to the owner of the network module instance
                 (Tid t, msgFromNetwork mfn){
@@ -94,7 +98,7 @@ private {
                         receiver.send(thisTid, mfn.msg);
                     }
                 },
-                
+
                 // Received a new socket (accepted)
                 // Add to socketMap
                 (Tid t, shared Socket s){
@@ -107,7 +111,7 @@ private {
                     }
                     printConnInfo();
                 },
-                
+
                 // A socket was shut down (connection died)
                 // Remove from the socketMap
                 (Tid t, shutdownMsg s){
@@ -115,8 +119,8 @@ private {
                     socketMap.remove(s.ID);
                     printConnInfo();
                 },
-                
-                
+
+
                 // List of active peers has a changed
                 // If slave->master (self has new highest ID):
                 //    Kill all conns
@@ -150,15 +154,15 @@ private {
                     oldMasterID = newMasterID;
 
                     printConnInfo();
-                    
-                    receiver.send(thisTid, plu);    
+
+                    receiver.send(thisTid, plu);
                 },
-                
+
                 // Unknown type
                 (Variant v){
                     debug(1) writeln(v, " (unknown)");
                 }
-            );     
+            );
         }
     }
 
@@ -220,16 +224,16 @@ private {
             }
         }
     }
-        
-        
 
 
-    /** 
+
+
+    /**
     Read until '\0' on socket s
     Send a msgFromNetwork with the content to recipient
      */
     void receive_thr(Tid recipient, shared Socket s){
-        scope(exit){ 
+        scope(exit){
             debug(2) writeln("scope(exit): ", __FUNCTION__, " for ID ", ID);
         }
 
@@ -319,4 +323,4 @@ private {
         alias msg this;
     }
 }
-    
+

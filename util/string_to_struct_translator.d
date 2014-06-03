@@ -4,10 +4,6 @@ import  std.traits,
         std.concurrency,
         std.algorithm;
         
-import  types;
-
-import std.stdio;
-
 
 template stringToStructTranslator_thr(T...){
     void stringToStructTranslator_thr(){
@@ -17,12 +13,12 @@ template stringToStructTranslator_thr(T...){
                     foreach(t; T){
                         static if(is(t == struct)){ 
                             static if(!std.traits.hasLocalAliasing!t){
-                                mixin(
-                    "if(s.startsWith(\"" ~ t.stringof ~ "(\")){
-                        ownerTid.send(" ~ t.stringof ~ "(s));
+                            
+                    if(s.startsWith(t.stringof)){
+                        ownerTid.send(t(s));
                         return;
-                    }"
-                                );
+                    }
+                    
                             } else {
                                 static assert(false, "stringToStructTranslator types must not have local aliasing. (Violated by " ~ t.stringof ~ ")");
                             }
