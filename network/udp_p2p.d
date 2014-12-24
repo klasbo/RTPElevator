@@ -12,8 +12,6 @@ import  core.thread,
         std.stdio,
         std.string;
 
-import  util.threeway_spawn_mixin;
-
 
 public {
     shared static this(){
@@ -87,14 +85,12 @@ private {
     void udp_p2p(Tid receiver){
         scope(exit) writeln(__FUNCTION__, " died");
 
-        mixin(spawn3way(
-            [   "thread:iAmAlive_send_tid   iAmAlive_send_thr",
-                "thread:iAmAlive_recv_tid   iAmAlive_recv_thr",
-                "thread:msg_send_tid        msg_send_thr",
-                "thread:msg_recv_tid        msg_recv_thr"   ],
-            false
-        ));
-
+        auto iAmAlive_send_tid  = spawn( &iAmAlive_send_thr );
+        auto iAmAlive_recv_tid  = spawn( &iAmAlive_recv_thr );
+        auto msg_send_tid       = spawn( &msg_send_thr      );
+        auto msg_recv_tid       = spawn( &msg_recv_thr      );
+        
+        
         ownerTid.send(initDone());
         while(true){
             receive(
@@ -132,7 +128,6 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
-        mixin(reciprocate3way(""));
         while(true){
             sock.sendTo(ID, addr);
             Thread.sleep(iAmAliveSendInterval);
@@ -159,7 +154,6 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, iAmAliveTimeout);
         sock.bind(addr);
 
-        mixin(reciprocate3way(""));
         while(true){
             listHasChanges  = false;
             buf[]           = 0;
@@ -198,7 +192,6 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
-        mixin(reciprocate3way(""));
         while(true){
             receive(
                 (msgToNetwork mtn){
@@ -223,7 +216,6 @@ private {
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
         sock.bind(addr);
 
-        mixin(reciprocate3way(""));
         while(sock.receiveFrom(buf) > 0){
             ownerTid.send( msgFromNetwork( (cast(string)buf).strip('\0').dup ) );
             buf.destroy;
