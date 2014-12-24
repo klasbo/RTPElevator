@@ -155,7 +155,8 @@ shared static this(){
             "simulationElevator_travelTimeBetweenFloors_ms",    &travelTimeBetweenFloors_ms,
             "simulationElevator_travelTimePassingFloor_ms",     &travelTimePassingFloor_ms,
             "simulationElevator_btnDepressedTime_ms",           &btnDepressedTime_ms,
-            "simulationElevator_comPort",                       &comPort,
+            "simulationElevator_comPortToDisplay",              &comPortToDisplay,
+            "simulationElevator_comPortFromDisplay",            &comPortFromDisplay,
             "OS_linux_terminal",                                &linux_terminal
         );
     } catch(Exception e){
@@ -165,7 +166,7 @@ shared static this(){
 
 private {
 
-    // Elevator state
+    // Position and direction
     shared int              currFloor;
     shared int              prevFloor;
     shared int              nextFloor;
@@ -192,7 +193,8 @@ private {
     shared uint             travelTimeBetweenFloors_ms  = 1500;
     shared uint             travelTimePassingFloor_ms   = 650;
     shared uint             btnDepressedTime_ms         = 200;
-    shared ushort           comPort                     = 40000;
+    shared ushort           comPortToDisplay            = 40000;
+    shared ushort           comPortFromDisplay          = 40001;
     __gshared string        linux_terminal              = "$TERM";
     Duration                travelTimeBetweenFloors;
     Duration                travelTimePassingFloor;
@@ -341,7 +343,7 @@ void thr_simulationLoop(){
     travelTimeBetweenFloors     = travelTimeBetweenFloors_ms.msecs;
     travelTimePassingFloor      = travelTimePassingFloor_ms.msecs;
     btnDepressedTime            = btnDepressedTime_ms.msecs;
-    addr                        = new InternetAddress("localhost", comPort);
+    addr                        = new InternetAddress("localhost", comPortToDisplay);
     sock                        = new UdpSocket();
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
@@ -419,19 +421,14 @@ void thr_simulationLoop(){
 void thr_controlPanelInput(){
     scope(exit){ writeln(__FUNCTION__, " died"); }
 
-    writeln("elevator control started");
+    ubyte[1] buf;
+    auto    addr    = new InternetAddress("localhost", comPortFromDisplay);
+    auto    sock    = new UdpSocket();
 
-    version(Windows){
-        import core.sys.windows.windows;
-        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
-    }
-    while(1){
-        foreach(ubyte[] buf; stdin.byChunk(1)){
-            ownerTid.send(buf.idup);
-            version(Windows){
-                SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
-            }
-        }
+    sock.bind(addr);
+
+    while(sock.receive(buf) > 0){
+        ownerTid.send(buf.idup);
     }
 }
 
@@ -519,41 +516,86 @@ class ElevatorCrash : Exception {
 
 struct stateUpdated {}
 
-
-
-
-
 string secondWindowProgram(){
-return
-"
-import  std.stdio,
-        std.socket,
-        std.c.process;
+    return q{
+        import  std.stdio,
+                std.socket,
+                std.concurrency,
+                std.file,
+                std.getopt,
+                std.string,
+                std.c.process,
+                core.thread;
 
-void main(){
-    import core.thread;
+        shared ushort comPortToDisplay      = 40000;
+        shared ushort comPortFromDisplay    = 40001;
 
-    auto    addr    = new InternetAddress(\"localhost\", " ~ comPort.to!string ~ ");
-    auto    sock    = new UdpSocket();
 
-    ubyte[2048]     buf;
-
-    sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-    sock.bind(addr);
-
-    while(sock.receive(buf) > 0){
-        version(Windows){
-            system(\"CLS\");
+        shared static this(){
+            string[] configContents;
+            try {
+                configContents = readText("ElevatorConfig.con").split;
+                getopt( configContents,
+                    std.getopt.config.passThrough,
+                    "simulationElevator_comPortToDisplay",          &comPortToDisplay,
+                    "simulationElevator_comPortFromDisplay",        &comPortFromDisplay,
+                );
+            } catch(Exception e){
+                writeln("Unable to load simulationElevator config: ", e.msg);
+            }
         }
-        version(linux){
-            system(\"clear\");
+
+
+        void thr_controlPanelInput(shared UdpSocket _sock){
+            scope(exit){ writeln(__FUNCTION__, " died"); }
+
+            auto    addr    = new InternetAddress("localhost", comPortFromDisplay);
+            auto    sock    = cast(UdpSocket)_sock;
+
+            version(Windows){
+                import core.sys.windows.windows;
+                SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+            }
+            while(1){
+                foreach(ubyte[] buf; stdin.byChunk(1)){
+                    sock.sendTo(buf, addr);
+                    version(Windows){
+                        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
+                    }
+                }
+            }
         }
-        writeln(cast(string)buf);
-        buf.destroy;
-    }
-}
-";
-};
 
+        void main(){
+            scope(exit){ writeln(__FUNCTION__, " died"); }
+            auto    addr    = new InternetAddress("localhost", comPortToDisplay);
+            auto    sock    = new UdpSocket();
+
+            ubyte[2048]     buf;
+
+            sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
+            sock.bind(addr);
+
+            spawn( &thr_controlPanelInput, cast(shared)sock );
+
+            void cls(){
+                version(Windows){
+                    system("CLS");
+                }
+                version(linux){
+                    system("clear");
+                }
+            }
+            cls;
+            while(sock.receiveFrom(buf) > 0){
+                cls;
+                writeln(cast(string)buf);
+                buf.destroy;
+            }
+        }
+    };
 
 }
+
+}
+

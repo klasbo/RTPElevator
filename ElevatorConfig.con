@@ -16,7 +16,8 @@ ElevatorConfig
 --simulationElevator_travelTimeBetweenFloors_ms     1500
 --simulationElevator_travelTimePassingFloor_ms      650
 --simulationElevator_btnDepressedTime_ms            200
---simulationElevator_comPort                        40020
+--simulationElevator_comPortToDisplay               40022
+--simulationElevator_comPortFromDisplay             40023
 
 --comediElevator_motorSpeed                         500
 
