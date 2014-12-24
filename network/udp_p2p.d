@@ -210,7 +210,7 @@ private {
 
         auto    addr    = new InternetAddress(msgPort);
         auto    sock    = new UdpSocket();
-        ubyte[1024] buf;
+        ubyte[msgBufsize] buf;
 
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
