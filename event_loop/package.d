@@ -116,6 +116,7 @@ private {
 
         if(elevator.ReadFloorSensor == -1){
             elevator.SetMotorDirection(MotorDirection.DOWN);
+            states[thisPeerID].moving = true;
         }
 
         networkTid.send(StateRestoreRequest(thisPeerID).to!string);
@@ -151,6 +152,10 @@ private {
                         if(externalOrders[bpe.floor][bpe.btn].status == ExternalOrder.Status.active){
                             break;
                         }
+                        if(!alivePeers.canFind(thisPeerID)){
+                            writeln("Warning: This elevator is DISCONNECTED, and will not take new external orders!");
+                            break;
+                        }
                         networkTid.send(OrderMsg(
                             states
                                 .filterAlive(alivePeers)
@@ -174,10 +179,10 @@ private {
 
                         if( !getThisState.moving  &&
                             getThisState.floor == bpe.floor  &&
-                            getThisState.shouldStop(bpe.floor))
+                            getThisState.shouldStop)
                         {
                             timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                            clearOrders(bpe.floor);
+                            clearOrdersAtCurrentFloor;
                         }
                         if(getThisState.isIdle){
                             timerEventTid.send(thisTid, doorClose, 0.seconds);
@@ -191,12 +196,12 @@ private {
                 (floorArrivalEvent fae){
                     writeln("  New floor: ", fae);
                     states[thisPeerID].floor = fae;
-                    if(getThisState.shouldStop(fae)){
+                    if(getThisState.shouldStop){
                         elevator.SetMotorDirection(MotorDirection.STOP);
                         states[thisPeerID].moving = false;
                         timerEventTid.send(thisTid, doorClose, doorOpenTime);
                         elevator.SetLight(Light.DOOR_OPEN, true);
-                        clearOrders(fae);
+                        clearOrdersAtCurrentFloor;
                     }
                     networkTid.send(wrappedState);
                 },
@@ -211,7 +216,7 @@ private {
                             // add to externalOrders
                             externalOrders[om.floor][om.btn].status = pending;
                             externalOrders[om.floor][om.btn].assignedID = om.assignedID;
-                            externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                            externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                             // reply with ackOrder from this
                             networkTid.send(OrderMsg(
                                 om.assignedID,
@@ -243,47 +248,48 @@ private {
                         }
                         break;
 
-                    case ackOrder: if(om.orderOriginID == thisPeerID){
-                        final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
-                        case inactive:
-                            //  ok: Only makes sense to accept ack's of pending orders where origin = this
-                            writeln("Warning: Refused an acknowledgement of an order that is inactive");
-                            break;
-                        case pending:
-                            externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
-                            // if all alive peers have ack'd
-                            //   send confirmedOrder
-                            if( alivePeers
-                                .sort
-                                .setDifference(externalOrders[om.floor][om.btn].hasConfirmed.sort)
-                                .empty)
-                            {
-                                networkTid.send(OrderMsg(
-                                    om.assignedID,
-                                    om.floor,
-                                    om.btn,
-                                    om.orderOriginID,
-                                    thisPeerID,
-                                    MessageType.confirmedOrder
-                                ).to!string);
-                                timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
-                                externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                    case ackOrder:
+                        if(om.orderOriginID == thisPeerID){
+                            final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
+                            case inactive:
+                                //  ok: Only makes sense to accept ack's of pending orders where origin = this
+                                writeln("Warning: Refused an acknowledgement of an order that is inactive");
+                                break;
+                            case pending:
+                                externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
+                                // if all alive peers have ack'd
+                                //   send confirmedOrder
+                                if( alivePeers
+                                    .sort
+                                    .setDifference(externalOrders[om.floor][om.btn].hasConfirmed.sort)
+                                    .empty)
+                                {
+                                    networkTid.send(OrderMsg(
+                                        om.assignedID,
+                                        om.floor,
+                                        om.btn,
+                                        om.orderOriginID,
+                                        thisPeerID,
+                                        MessageType.confirmedOrder
+                                    ).to!string);
+                                    timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
+                                    externalOrders[om.floor][om.btn].hasConfirmed.destroy;
+                                }
+                                break;
+                            case active:
+                                //  ok: Only makes sense to accept ack's of pending orders where origin = this
+                                writeln("Warning: Refused an acknowledgement of an order that is already active");
+                                break;
                             }
-                            break;
-                        case active:
-                            //  ok: Only makes sense to accept ack's of pending orders where origin = this
-                            writeln("Warning: Refused an acknowledgement of an order that is already active");
-                            break;
                         }
-
-                        } break;
+                        break;
 
                     case confirmedOrder:
                         final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
                         case inactive:
                             if(om.msgOriginID != thisPeerID){
                                 externalOrders[om.floor][om.btn].assignedID = om.assignedID;
-                                externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                                externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                                 goto case pending;
                             } else {
                                 break;
@@ -295,10 +301,10 @@ private {
 
                             if( !getThisState.moving  &&
                                 getThisState.floor == om.floor  &&
-                                getThisState.shouldStop(om.floor))
+                                getThisState.shouldStop)
                             {
                                 timerEventTid.send(thisTid, doorClose, doorOpenTime);
-                                clearOrders(om.floor);
+                                clearOrdersAtCurrentFloor;
                             }
                             if(getThisState.isIdle){
                                 timerEventTid.send(thisTid, doorClose, 0.seconds);
@@ -321,7 +327,7 @@ private {
                         //      This may mean that an unassigned elevator clears an order, which is ok.
                         externalOrders[om.floor][om.btn].status = ExternalOrder.Status.inactive;
                         externalOrders[om.floor][om.btn].assignedID = 0;
-                        externalOrders[om.floor][om.btn].hasConfirmed.clear;
+                        externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                         elevator.SetLight(om.floor, cast(Light)om.btn, false);
                         break;
                     }
@@ -376,7 +382,7 @@ private {
                                 states[thisPeerID].dirn = getThisState.chooseDirn;
                                 elevator.SetMotorDirection(states[thisPeerID].dirn);
 
-                                clearOrders(states[thisPeerID].floor);
+                                clearOrdersAtCurrentFloor;
                                 if(states[thisPeerID].dirn != MotorDirection.STOP){
                                     elevator.SetLight(Light.DOOR_OPEN, false);
                                     states[thisPeerID].moving = true;
@@ -389,7 +395,7 @@ private {
                             return;
                         }
                         // --- order ack timeout --- //
-                        if(s.skipOver("ack")){
+                        if(s.startsWith("ack")){
                             /+++++
                             // Not necessary! confirmedOrder will only be sent if ALL acknowledge, so there's no _need_ to solve this in software.
                             //   -> Reliability goes down with more participants (elevators)
@@ -403,7 +409,8 @@ private {
                                 MessageType.newOrder
                             ).to!string);
                             +++++/
-                            writeln("Warning: Acknowledgement of order ", s.parse!int, " ", s.parse!ButtonType, "failed!\n",
+                            s.skipOver("ack");
+                            writeln("Warning: Acknowledgement of order ", s.parse!int, " ", s.parse!ButtonType, " failed!\n",
                                     "    Expected behaviour: Light is not turned on. \n",
                                     "    Press the button again to retry...");
                             return;
@@ -457,7 +464,8 @@ private {
         return states[thisPeerID].generalize(thisPeerID, externalOrders);
     }
 
-    void clearOrders(int floor){
+    void clearOrdersAtCurrentFloor(){
+        auto floor = states[thisPeerID].floor;
         states[thisPeerID].internalOrders[floor] = false;
         elevator.SetLight(floor, Light.COMMAND, false);
         final switch(states[thisPeerID].dirn) with(MotorDirection) {

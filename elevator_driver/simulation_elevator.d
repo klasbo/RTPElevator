@@ -152,11 +152,11 @@ shared static this(){
         configContents = readText("ElevatorConfig.con").split;
         getopt( configContents,
             std.getopt.config.passThrough,
-            "simulationElevator_travelTime_ms",         &travelTime_ms,
-            "simulationElevator_doorOpenTime_ms",       &doorOpenTime_ms,
-            "simulationElevator_btnDepressedTime_ms",   &btnDepressedTime_ms,
-            "simulationElevator_comPort",               &comPort,
-            "OS_linux_terminal",                        &linux_terminal
+            "simulationElevator_travelTimeBetweenFloors_ms",    &travelTimeBetweenFloors_ms,
+            "simulationElevator_travelTimePassingFloor_ms",     &travelTimePassingFloor_ms,
+            "simulationElevator_btnDepressedTime_ms",           &btnDepressedTime_ms,
+            "simulationElevator_comPort",                       &comPort,
+            "OS_linux_terminal",                                &linux_terminal
         );
     } catch(Exception e){
         writeln("Unable to load simulationElevator config: ", e.msg);
@@ -184,18 +184,18 @@ private {
     shared bool             doorLight;
 
     // Printing
-    shared int              printCount;
+    int                     printCount;
     InternetAddress         addr;
     Socket                  sock;
 
     // Config
-    shared uint             travelTime_ms           = 1500;
-    shared uint             doorOpenTime_ms         = 650;
-    shared uint             btnDepressedTime_ms     = 200;
-    shared ushort           comPort                 = 40000;
-    __gshared string        linux_terminal          = "$TERM";
-    Duration                travelTime;
-    Duration                doorOpenTime;
+    shared uint             travelTimeBetweenFloors_ms  = 1500;
+    shared uint             travelTimePassingFloor_ms   = 650;
+    shared uint             btnDepressedTime_ms         = 200;
+    shared ushort           comPort                     = 40000;
+    __gshared string        linux_terminal              = "$TERM";
+    Duration                travelTimeBetweenFloors;
+    Duration                travelTimePassingFloor;
     Duration                btnDepressedTime;
 
 
@@ -229,7 +229,7 @@ void thr_simulationLoop(){
                     if(currDir == MotorDirection.UP    &&  (s[3]-'0').to!int < prevFloor){ return; }
                     if(currDir == MotorDirection.DOWN  &&  (s[3]-'0').to!int > prevFloor){ return; }
                     currFloor = prevFloor = (s[3]-'0').to!int;
-                    timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
+                    timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
                     return;
                 }
                 if(currDir == MotorDirection.STOP){
@@ -243,7 +243,7 @@ void thr_simulationLoop(){
                         throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed top floor going upward\n");
                     }
                     currFloor = -1;
-                    timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTime);
+                    timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTimeBetweenFloors);
                     nextFloor = prevFloor+1;
                     return;
                 }
@@ -252,7 +252,7 @@ void thr_simulationLoop(){
                         throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed bottom floor going downward\n");
                     }
                     currFloor = -1;
-                    timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTime);
+                    timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTimeBetweenFloors);
                     nextFloor = prevFloor-1;
                     return;
                 }
@@ -338,8 +338,8 @@ void thr_simulationLoop(){
     timerEvent_thread           = spawn( &timerEvent_thr );
     controlPanelInput_thread    = spawn( &thr_controlPanelInput );
 
-    travelTime                  = travelTime_ms.msecs;
-    doorOpenTime                = doorOpenTime_ms.msecs;
+    travelTimeBetweenFloors     = travelTimeBetweenFloors_ms.msecs;
+    travelTimePassingFloor      = travelTimePassingFloor_ms.msecs;
     btnDepressedTime            = btnDepressedTime_ms.msecs;
     addr                        = new InternetAddress("localhost", comPort);
     sock                        = new UdpSocket();
@@ -370,27 +370,27 @@ void thr_simulationLoop(){
                 final switch(currDir) with(MotorDirection){
                 case UP:
                     if(currFloor != -1){
-                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
+                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
                     } else {
                         if(prevDir == MotorDirection.UP){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTime);
+                            timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTimeBetweenFloors);
                             nextFloor = prevFloor+1;
                         }
                         if(prevDir == MotorDirection.DOWN){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTime);
+                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTimeBetweenFloors);
                         }
                     }
                     prevDir = currDir;
                     break;
                 case DOWN:
                     if(currFloor != -1){
-                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, doorOpenTime);
+                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
                     } else {
                         if(prevDir == MotorDirection.UP){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTime);
+                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTimeBetweenFloors);
                         }
                         if(prevDir == MotorDirection.DOWN){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTime);
+                            timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTimeBetweenFloors);
                             nextFloor = prevFloor-1;
                         }
                     }
@@ -549,7 +549,7 @@ void main(){
             system(\"clear\");
         }
         writeln(cast(string)buf);
-        buf.clear;
+        buf.destroy;
     }
 }
 ";

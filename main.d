@@ -23,29 +23,29 @@ shared static this(){
 q"EOS
 ElevatorConfig
 
---eventLoop_elevatorType                    simulation
---eventLoop_doorOpenTime_ms                 3000
---eventLoop_ackTimeout_ms                   50
---eventLoop_reassignMinTime_s               3
---eventLoop_reassignMaxTime_s               7
---eventLoop_bestFit_travelTimeEstimate_ms   4000
+--eventLoop_elevatorType                            simulation
+--eventLoop_doorOpenTime_ms                         3000
+--eventLoop_ackTimeout_ms                           50
+--eventLoop_reassignMinTime_s                       3
+--eventLoop_reassignMaxTime_s                       7
+--eventLoop_bestFit_travelTimeEstimate_ms           4000
 
---network_IDOffset                          0
---network_iAmAliveSendInterval_ms           300
---network_iAmAliveTimeout_ms                1000        // must be larger than sendInterval
---network_iAmAlivePort                      22222
---network_msgPort                           22223
+--network_IDOffset                                  0
+--network_iAmAliveSendInterval_ms                   300
+--network_iAmAliveTimeout_ms                        1000        // must be larger than sendInterval
+--network_iAmAlivePort                              22222
+--network_msgPort                                   22223
 
---simulationElevator_travelTime_ms          1500
---simulationElevator_doorOpenTime_ms        650
---simulationElevator_btnDepressedTime_ms    200
---simulationElevator_comPort                40000
+--simulationElevator_travelTimeBetweenFloors_ms     1500
+--simulationElevator_travelTimePassingFloor_ms      650
+--simulationElevator_btnDepressedTime_ms            200
+--simulationElevator_comPort                        40000
 
---comediElevator_motorSpeed                 500
+--comediElevator_motorSpeed                         500
 
---elevatorDriver_pollRate_ms                10
+--elevatorDriver_pollRate_ms                        10
 
---OS_linux_terminal                         $TERM
+--OS_linux_terminal                                 $TERM
 EOS"
         );
     }

@@ -5,6 +5,7 @@ import  std.algorithm,
         std.file,
         std.getopt,
         std.math,
+        std.typecons,
         std.range,
         std.stdio;
 
@@ -89,18 +90,18 @@ GeneralizedElevatorState[] augment(GeneralizedElevatorState[] states, btnPressEv
     .array;
 }
 
-bool shouldStop(GeneralizedElevatorState state, int floor){
+bool shouldStop(GeneralizedElevatorState state){
     final switch(state.dirn) with(MotorDirection){
     case UP:
         return  !state.ordersAbove  ||
                 state.floor == state.orders.length  ||
-                state.orders[floor][ButtonType.UP]  ||
-                state.orders[floor][ButtonType.COMMAND];
+                state.orders[state.floor][ButtonType.UP]  ||
+                state.orders[state.floor][ButtonType.COMMAND];
     case DOWN:
         return  !state.ordersBelow  ||
                 state.floor == 0  ||
-                state.orders[floor][ButtonType.DOWN]  ||
-                state.orders[floor][ButtonType.COMMAND];
+                state.orders[state.floor][ButtonType.DOWN]  ||
+                state.orders[state.floor][ButtonType.COMMAND];
     case STOP:
         return  true;
     }
@@ -171,106 +172,92 @@ string ack(int floor, ButtonType btn){
 
 
 
-auto bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn = ButtonType.COMMAND){
 
-    struct Button {
-        int         floor;
-        ButtonType  btn;
+/++ Only current algorithm is "time until all orders are done".
+        Passing floor and btn does nothing.
++/
+ID_t bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn = ButtonType.COMMAND){
+
+    static ulong timeUntilAllDone(GeneralizedElevatorState s){
+    
+        if(s.floor == -1){
+            return ulong.max;
+        }
+    
+        auto numStopsUpward          = s.orders.map!(a => a[ButtonType.UP]).count(true);
+        auto numStopsDownward        = s.orders.map!(a => a[ButtonType.DOWN]).count(true);
+        auto numStopsCommandUnique   = s.orders.map!(a => a[ButtonType.COMMAND] && !a[ButtonType.DOWN] && !a[ButtonType.UP]).count(true);
+
+        auto numStops = numStopsUpward + numStopsDownward + numStopsCommandUnique;
+        
+        auto nextFloor =
+            s.moving
+            ?   s.dirn == MotorDirection.UP   ? s.floor + 1 :
+                s.dirn == MotorDirection.DOWN ? s.floor - 1 :
+                /+ "moving" w/ dirn == STOP +/  s.floor
+            : s.floor;
+            
+        auto topDestination = 
+            s.orders[nextFloor..$].map!any.any
+            ? s.orders.length - 1 - s.orders.retro.map!any.countUntil(true)
+            : nextFloor;
+            
+        auto bottomDestination =
+            s.orders[0..nextFloor].map!any.any
+            ? s.orders.map!any.countUntil(true)
+            : nextFloor;
+                    
+        auto topRetroDestination =
+            //If moving down from a floor lower than topDestination: 
+              (s.dirn == MotorDirection.DOWN  &&  nextFloor < topDestination)
+            //  Include initial travel from s.floor to bottomDestination
+            ?   s.floor
+            //If moving down with upward orders between nextFloor and bottomDestination: 
+            : ((s.dirn == MotorDirection.DOWN || s.floor > bottomDestination) &&  s.orders[bottomDestination..nextFloor].map!(a => a[ButtonType.UP]).any)
+            //  Include travel from bottomDestination to highest upward order below s.floor
+            ?   s.floor - 1 - s.orders[bottomDestination..s.floor].retro.map!(a => a[ButtonType.UP]).countUntil(true)
+            //Else, Include no extra retrograde travel
+            :   bottomDestination;
+            
+        auto bottomRetroDestination =
+              (s.dirn == MotorDirection.UP  &&  nextFloor > bottomDestination)
+            ?   s.floor
+            : ((s.dirn == MotorDirection.UP || s.floor < topDestination)  &&  s.orders[nextFloor..topDestination].map!(a => a[ButtonType.DOWN]).any)
+            ?   s.floor + s.orders[s.floor..topDestination].map!(a => a[ButtonType.DOWN]).countUntil(true)
+            :   topDestination;
+
+        
+        
+        // if(s.floor < bottomDestination  ||  s.floor > topDestination){
+        //     assert(s.moving);
+        // }
+        
+        /+
+        writeln(bottomDestination, "-", bottomRetroDestination,
+                "  ", s.floor, "(", nextFloor, ")  ",
+                topRetroDestination, "-", topDestination
+                
+            , "  : ",   (topDestination - bottomDestination)
+            , " ",      (topDestination - bottomRetroDestination)
+            , " ",      (topRetroDestination - bottomDestination)
+            , "  \t", s.ID, "\n"
+        );
+        +/
+
+        
+        return  (numStops * doorOpenTime)
+            +   (topDestination - bottomDestination) * travelTimeEstimate
+            +   (topDestination - bottomRetroDestination) * travelTimeEstimate
+            +   (topRetroDestination - bottomDestination) * travelTimeEstimate
+            // Include time from prevFloor (s.floor) to nextFloor when there are no orders at prevFloor: (only happens when s.moving)
+            +   ((s.floor < bottomDestination  ||  s.floor > topDestination) ? travelTimeEstimate : 0)
+            ;
     }
-
-    ulong timeUntil(ref GeneralizedElevatorState s, Button b){
-        int timeInDir;
-
-        if(!s.orders.map!any.any){
-            return 0;
-        }
-        if(b.floor != -1  &&  s.orders[b.floor][b.btn] == false){
-            return 0;
-        }
-        if(s.floor == b.floor){
-            s.orders[b.floor][b.btn] = false;
-            return doorOpenTime;
-        }
-
-        final switch(s.dirn) with(MotorDirection){
-        case STOP:
-            int numButtonPresses = s.orders.map!(a => a.count(true)).reduce!"a+b".to!int;
-            if(s.dirn == MotorDirection.STOP  &&  numButtonPresses > 1){
-                writeln("dirn == STOP and more than one order makes no sense");
-                return int.max;
-            }
-            int floorOfOnlyOrder = s.orders.map!any.countUntil(true).to!int;
-            timeInDir += (s.floor - floorOfOnlyOrder).abs * travelTimeEstimate;
-            timeInDir += doorOpenTime;
-
-            s.orders[floorOfOnlyOrder][ButtonType.UP] = s.orders[floorOfOnlyOrder][ButtonType.DOWN] = s.orders[floorOfOnlyOrder][ButtonType.COMMAND] = false;
-            s.floor = floorOfOnlyOrder;
-            break;
-
-
-        case UP:
-            int floorOfTopOrder;
-            if(b.floor != -1  &&  b.floor > s.floor  &&  b.btn == ButtonType.UP){
-                floorOfTopOrder = b.floor;
-            } else {
-                floorOfTopOrder = (s.orders.length.to!int - 1 - s.orders.map!any.retro.countUntil(true).to!int);
-            }
-            timeInDir += (floorOfTopOrder - s.floor) * travelTimeEstimate;
-            if(s.moving){
-                s.floor++;
-            }
-            foreach(floor; s.floor..floorOfTopOrder){
-                if(s.orders[floor][ButtonType.COMMAND]  ||  s.orders[floor][ButtonType.UP]){
-                    timeInDir += doorOpenTime;
-                    s.orders[floor][ButtonType.COMMAND] = s.orders[floor][ButtonType.UP] = false;
-                }
-            }
-            timeInDir += doorOpenTime;
-
-            s.orders[floorOfTopOrder][ButtonType.UP] = s.orders[floorOfTopOrder][ButtonType.DOWN] = s.orders[floorOfTopOrder][ButtonType.COMMAND] = false;
-            s.floor = floorOfTopOrder;
-            s.dirn = MotorDirection.DOWN;
-            s.moving = true;
-            break;
-
-
-        case DOWN:
-            int floorOfBottomOrder;
-            if(b.floor != -1  &&  b.floor < s.floor  &&  b.btn == ButtonType.DOWN){
-                floorOfBottomOrder = b.floor;
-            } else {
-                floorOfBottomOrder = s.orders.map!any.countUntil(true).to!int;
-            }
-            timeInDir += (s.floor - floorOfBottomOrder) * travelTimeEstimate;
-            if(s.moving){
-                s.floor--;
-            }
-            foreach(floor; floorOfBottomOrder+1..s.floor+1){
-                if(s.orders[floor][ButtonType.COMMAND]  ||  s.orders[floor][ButtonType.DOWN]){
-                    timeInDir += doorOpenTime;
-                    s.orders[floor][ButtonType.COMMAND] = s.orders[floor][ButtonType.DOWN] = false;
-                }
-            }
-            timeInDir += doorOpenTime;
-
-            s.orders[floorOfBottomOrder][ButtonType.UP] = s.orders[floorOfBottomOrder][ButtonType.DOWN] = s.orders[floorOfBottomOrder][ButtonType.COMMAND] = false;
-            s.floor = floorOfBottomOrder;
-            s.dirn = MotorDirection.UP;
-            s.moving = true;
-            break;
-
-        }
-
-        if(timeInDir == 0){
-            return 0;
-        } else {
-            return timeInDir + timeUntil(s, b);
-        }
-    }
+    
 
     return
         states
-        .map!( a => a,  a => timeUntil(a, Button(floor, btn)) )
+        .map!( a => tuple(a,  timeUntilAllDone(a)) )
         .array
         .sort!((a,b) => a[1] < b[1])
         .front[0]

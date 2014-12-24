@@ -233,16 +233,15 @@ private {
     Send a msgFromNetwork with the content to recipient
      */
     void receive_thr(Tid recipient, shared Socket s){
-        scope(exit){
-            debug(2) writeln("scope(exit): ", __FUNCTION__, " for ID ", ID);
-        }
-
         auto        sock    = cast(Socket)s;
         ubyte       ID      = sock.remoteAddress.addrStringLastByte;
         ubyte[1]    buff;
         string      buffer;
 
         debug(2) writeln("    Receive thread started for ", sock.localAddress, " <-> ", sock.remoteAddress);
+        scope(exit){
+            debug(2) writeln("scope(exit): ", __FUNCTION__, " for ID ", ID);
+        }
 
         while(sock.isAlive){
             long retVal = sock.receive(buff);
@@ -251,7 +250,7 @@ private {
                     buffer ~= buff;
                 } else {
                     recipient.send(thisTid, msgFromNetwork(buffer));
-                    buffer.clear;
+                    buffer.destroy;
                 }
             } else {
                 debug(1) writeln("Disconnected... ", sock.localAddress, " <-> ", sock.remoteAddress, " ", Clock.currTime);

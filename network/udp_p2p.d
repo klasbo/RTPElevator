@@ -17,6 +17,7 @@ import  util.threeway_spawn_mixin;
 
 public {
     shared static this(){
+        scope(failure) writeln("Unable to resolve local IP address");
         auto sock   = new TcpSocket(new InternetAddress("www.google.com", 80));
         localIP     = sock.localAddress.toAddrString;
         sock.close;
@@ -225,7 +226,7 @@ private {
         mixin(reciprocate3way(""));
         while(sock.receiveFrom(buf) > 0){
             ownerTid.send( msgFromNetwork( (cast(string)buf).strip('\0').dup ) );
-            buf.clear;
+            buf.destroy;
         }
         } catch(Throwable t){ t.writeln; throw t; }
     }

@@ -50,7 +50,7 @@ string spawn3way(string[] threads, bool shareThreads, bool linked = false){
             meta = spawnInfo[j].strip.split;
             threadsByName[i] = meta[0];
             threadsByFunc[i] = meta[1];
-            meta.clear;
+            meta.destroy;
             j++;
         } else {
             assert(0, "No thread specified for element " ~ i.to!string);
@@ -60,7 +60,7 @@ string spawn3way(string[] threads, bool shareThreads, bool linked = false){
         mixin(parseArg("expect"));
         mixin(parseArg("signal"));
 
-        spawnInfo.clear;
+        spawnInfo.destroy;
     }
 
     string out1 = threadsByName.map!(a => ("Tid " ~ a ~ ";\n")).reduce!("a ~ b");
@@ -167,7 +167,7 @@ string parseArg(string type){
         if(meta.length){
             "~type~"[i] = meta.dup;
         }
-        meta.clear;
+        meta.destroy;
         j++;
     }";
 }
