@@ -272,7 +272,7 @@ private {
                                         thisPeerID,
                                         MessageType.confirmedOrder
                                     ).to!string);
-                                    timerEventTid.send(thisTid, ack(om.floor, om.btn), cancel);
+                                    timerEventTid.send(thisTid, ack(om.floor, om.btn), CancelEvent());
                                     externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                                 }
                                 break;

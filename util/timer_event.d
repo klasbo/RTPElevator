@@ -13,10 +13,11 @@ import  core.thread,
 //debug = timerEvent_thr;
 
 
-enum {
+enum EventType {
     oneshot,
-    periodic,
-    cancel
+    periodic
+}
+struct CancelEvent {
 }
 
 void timerEvent_thr(){
@@ -48,29 +49,34 @@ try{
     bool        isDone              = false;
 
 
-    void AddEvent(Tid owner, string eventName, SysTime timeOfEvent, Duration period, int type){
+    void AddEvent(Tid owner, string eventName, SysTime timeOfEvent, Duration period, EventType type){
+        // If the event exists: update event.time and event.period
         foreach(ref event; events){
             if(owner == event.owner  &&  eventName == event.name){
-                if(type == periodic){
+                final switch(type) with(EventType){
+                case periodic:
                     event = Event(owner, eventName, timeOfEvent + period, period);
-                } else if(type == oneshot){
+                    break;
+                case oneshot:
                     event = Event(owner, eventName, timeOfEvent, 0.msecs);
-                } else {
-                    debug writeln("Failure to update event: Event type ", type, "  does not exist");
+                    break;
                 }
                 return;
             }
         }
-        if(type == periodic  &&  period < eventMinimumPeriod){
+        
+        // Else: add new event
+        if(type == EventType.periodic  &&  period < eventMinimumPeriod){
             debug writeln("Failure to add new event: Event period is too fast");
             return;
         }
-        if(type == periodic){
+        final switch(type) with(EventType){
+        case periodic:
             events ~= Event(owner, eventName, timeOfEvent + period, period);
-        } else if(type == oneshot){
+            break;
+        case oneshot:
             events ~= Event(owner, eventName, timeOfEvent, 0.msecs);
-        } else {
-            debug writeln("Failure to add new event: Event type ", type, "  does not exist");
+            break;
         }
     }
 
@@ -78,18 +84,18 @@ try{
         receiveTimeout( timeUntilNextEvent,
             // in [time] timeunits (implicit oneshot)
             (Tid owner, string eventName, Duration time){
-                AddEvent(owner, eventName, Clock.currTime + time, 0.msecs, oneshot);
+                AddEvent(owner, eventName, Clock.currTime + time, 0.msecs, EventType.oneshot);
             },
             // in [time] timeunits, with type
-            (Tid owner, string eventName, Duration time, int type){
+            (Tid owner, string eventName, Duration time, EventType type){
                 AddEvent(owner, eventName, Clock.currTime + time, time, type);
             },
             // at [time] (implicit oneshot)
             (Tid owner, string eventName, SysTime time){
-                    AddEvent(owner, eventName, time, 0.msecs, oneshot);
+                    AddEvent(owner, eventName, time, 0.msecs, EventType.oneshot);
             },
             // cancel event
-            (Tid owner, string eventName, int cancel){
+            (Tid owner, string eventName, CancelEvent ce){
                 foreach(idx, event; events){
                     if(owner == event.owner  &&  eventName == event.name){
                         events = events.remove(idx);
