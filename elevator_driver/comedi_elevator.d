@@ -206,27 +206,17 @@ class ComediElevator : Elevator
         void SetMotorDirection(MotorDirection m){
             final switch(m) with(MotorDirection){
                 case STOP:
-                    if (lastMotorDir == UP){
-                        io_set_bit(MOTORDIR);
-                    } else if (lastMotorDir == DOWN){
-                        io_clear_bit(MOTORDIR);
-                    } else {
-                        // already standing still, no need to toggle.
-                    }
                     io_write_analog(MOTOR, 0);
-                    lastMotorDir = STOP;
                     break;
 
                 case UP:
                     io_clear_bit(MOTORDIR);
                     io_write_analog(MOTOR, 2048 + 2*motorSpeed);
-                    lastMotorDir = UP;
                     break;
 
                 case DOWN:
                     io_set_bit(MOTORDIR);
                     io_write_analog(MOTOR, 2048 + 2*motorSpeed);
-                    lastMotorDir = DOWN;
                     break;
             }
         }
@@ -243,8 +233,7 @@ class ComediElevator : Elevator
 
     private:
         int             motorSpeed      = 500;
-        auto            lastMotorDir    = MotorDirection.STOP;  // Used in SetMotorDirection. Try to not use it anywhere else.
-
+        
         int   _minFloor     = 0;
         int   _maxFloor     = 3;
 
