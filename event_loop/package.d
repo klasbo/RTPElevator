@@ -11,7 +11,7 @@ import  std.algorithm,
         std.stdio;
 
 import  elevator_driver,
-        event_loop.freeFuncs,
+        event_loop.free_funcs,
         event_loop.types,
         network.udp_p2p,
         util.string_to_struct_translator,

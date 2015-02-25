@@ -1,4 +1,4 @@
-module event_loop.freeFuncs;
+module event_loop.free_funcs;
 
 import  std.algorithm,
         std.conv,
