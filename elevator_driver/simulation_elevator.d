@@ -18,15 +18,6 @@ import util.timer_event;
 
 
 
-/**
-Visual representation of the elevator appears in a second window.
-
-Use QWE, SDF, ZXCV to control Up, Down, Command buttons.
-Use T for Stop button, G for obstruction switch.
-
-Windows: Keys react instantly.
-Linux: Press key followed by Enter.
-*/
 class SimulationElevator : Elevator
 {
 public:
@@ -39,19 +30,18 @@ public:
             import std.random;
             prevFloor = uniform(minFloor, maxFloor);
             currFloor = dice(80,20) ? -1 : prevFloor;
-            nextFloor = prevFloor;
             if(currFloor == -1  &&  prevFloor == minFloor){
-                prevDir = MotorDirection.UP;
+                departDir = MotorDirection.UP;
             } else if(currFloor == -1  &&  prevFloor == maxFloor){
-                prevDir = MotorDirection.DOWN;
+                departDir = MotorDirection.DOWN;
             } else {
-                prevDir = dice(50,50) ? MotorDirection.DOWN : MotorDirection.UP;
+                departDir = dice(50,50) ? MotorDirection.DOWN : MotorDirection.UP;
             }
             currDir = MotorDirection.STOP;
             break;
         case no:
-            prevDir = MotorDirection.STOP;
-            currDir = MotorDirection.STOP;
+            departDir   = MotorDirection.STOP;
+            currDir     = MotorDirection.STOP;
             break;
         }
     }
@@ -87,7 +77,7 @@ public:
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
+        simulationLoop_thread.send(StateUpdated());
     }
 
     void SetLight(int floor, Light l){
@@ -96,7 +86,7 @@ public:
         } else {
             throw new Exception("Invalid argument. Use a floor-dependent light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
+        simulationLoop_thread.send(StateUpdated());
     }
 
     void SetLight(Light l, bool enable){
@@ -110,7 +100,7 @@ public:
             default:
                 throw new Exception("Invalid argument. Use a floor-invariant light. Got " ~ to!(string)(l));
         }
-        simulationLoop_thread.send(stateUpdated());
+        simulationLoop_thread.send(StateUpdated());
     }
 
     void ResetLights(){
@@ -121,7 +111,7 @@ public:
         stpBtnLight = false;
         flrIndLight = 0;
 
-        simulationLoop_thread.send(stateUpdated());
+        simulationLoop_thread.send(StateUpdated());
     }
 
     void SetMotorDirection(MotorDirection m){
@@ -157,7 +147,6 @@ shared static this(){
             "simulationElevator_btnDepressedTime_ms",           &btnDepressedTime_ms,
             "simulationElevator_comPortToDisplay",              &comPortToDisplay,
             "simulationElevator_comPortFromDisplay",            &comPortFromDisplay,
-            "OS_linux_terminal",                                &linux_terminal
         );
     } catch(Exception e){
         writeln("Unable to load simulationElevator config: ", e.msg);
@@ -166,173 +155,59 @@ shared static this(){
 
 private {
 
-    // Position and direction
-    shared int              currFloor;
-    shared int              prevFloor;
-    shared int              nextFloor;
-    shared MotorDirection   currDir;
-    shared MotorDirection   prevDir;
+// Threads
+Tid                     simulationLoop_thread;
+Tid                     timerEvent_thread;
+Tid                     controlPanelInput_thread;
 
-    // Buttons & switches
-    shared bool[][]         buttons;
-    shared bool             stopBtn;
-    shared bool             obstrSwch;
+// Position and direction
+shared int              currFloor;
+shared int              prevFloor;
+shared MotorDirection   currDir;
+shared MotorDirection   departDir;
+__gshared string        moveEvent;
 
-    // Lights
-    shared bool[][]         lights;
-    shared int              flrIndLight;
-    shared bool             stpBtnLight;
-    shared bool             doorLight;
+shared int              ioDir;
+shared int              motorAnalogVal;
 
-    // Printing
-    int                     printCount;
-    InternetAddress         addr;
-    Socket                  sock;
+// Buttons & switches
+shared bool[][]         buttons;
+shared bool             stopBtn;
+shared bool             obstrSwch;
 
-    // Config
-    shared uint             travelTimeBetweenFloors_ms  = 1500;
-    shared uint             travelTimePassingFloor_ms   = 650;
-    shared uint             btnDepressedTime_ms         = 200;
-    shared ushort           comPortToDisplay            = 40000;
-    shared ushort           comPortFromDisplay          = 40001;
-    __gshared string        linux_terminal              = "$TERM";
-    Duration                travelTimeBetweenFloors;
-    Duration                travelTimePassingFloor;
-    Duration                btnDepressedTime;
+// Lights
+shared bool[][]         lights;
+shared int              flrIndLight;
+shared bool             stpBtnLight;
+shared bool             doorLight;
 
+// Printing
+int                     printCount;
+InternetAddress         addr;
+Socket                  sock;
+
+// Config
+__gshared uint          travelTimeBetweenFloors_ms  = 1500;
+Duration                travelTimeBetweenFloors;
+__gshared uint          travelTimePassingFloor_ms   = 650;
+Duration                travelTimePassingFloor;
+__gshared uint          btnDepressedTime_ms         = 200;
+Duration                btnDepressedTime;
+__gshared ushort        comPortToDisplay            = 40000;
+__gshared ushort        comPortFromDisplay          = 40001;
+
+immutable int           minFloor        = 0;
+immutable int           maxFloor        = 3;
 
 
 
 void thr_simulationLoop(){
-    scope(exit){
+    scope(failure){
         writeln(__FUNCTION__, " died");
-        writeln("Debug info:\nprevDir=", prevDir, "\ncurrDir=", currDir,
-                "\nprevFloor=", prevFloor, "\ncurrFloor=", currFloor,
-                "\nnextFloor=", nextFloor);
+        writeln("Debug info:\ndepartDir=", departDir, "\ncurrDir=", currDir,
+                "\nprevFloor=", prevFloor, "\ncurrFloor=", currFloor);
     }
     try {
-
-    // --- DECLARATIONS --- //
-
-    Tid         timerEvent_thread;
-    Tid         controlPanelInput_thread;
-
-
-
-    // --- FUNCTIONS --- //
-
-    void handleTimerEvent(string s){
-        switch(s[0..3]){
-            case "arr":
-                if(currDir != MotorDirection.STOP){
-                    if(s[3] == '-'  || s[3] == '4'){
-                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: \"Arrived\" at a non-existent floor\n");
-                    }
-                    if(currDir == MotorDirection.UP    &&  (s[3]-'0').to!int < prevFloor){ return; }
-                    if(currDir == MotorDirection.DOWN  &&  (s[3]-'0').to!int > prevFloor){ return; }
-                    currFloor = prevFloor = (s[3]-'0').to!int;
-                    timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
-                    return;
-                }
-                if(currDir == MotorDirection.STOP){
-                    // ignore, elevator stopped before it reached the floor
-                }
-                return;
-
-            case "dep":
-                if(currDir == MotorDirection.UP){
-                    if(s[3] == '3'){
-                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed top floor going upward\n");
-                    }
-                    currFloor = -1;
-                    timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTimeBetweenFloors);
-                    nextFloor = prevFloor+1;
-                    return;
-                }
-                if(currDir == MotorDirection.DOWN){
-                    if(s[3] == '0'){
-                        throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed bottom floor going downward\n");
-                    }
-                    currFloor = -1;
-                    timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTimeBetweenFloors);
-                    nextFloor = prevFloor-1;
-                    return;
-                }
-                return;
-
-            case "btn":
-                switch(s[3]){
-                    case 'u': buttons[(s[4]-'0').to!int][0] = false; return;
-                    case 'd': buttons[(s[4]-'0').to!int][1] = false; return;
-                    case 'c': buttons[(s[4]-'0').to!int][2] = false; return;
-                    default: writeln("Bad timer event received: unable to parse \"", s, "\""); return;
-                }
-
-            case "stp":
-                stopBtn = false;
-                return;
-
-            default:
-                writeln("Bad timer event received: unable to parse \"", s, "\"");
-                return;
-        }
-    }
-
-    void handleStdinEvent(char c){
-        switch(c){
-            case 'q': // 0 up
-                buttons[0][ButtonType.UP] = true;
-                timerEvent_thread.send(thisTid, "btnu0", btnDepressedTime);
-                break;
-            case 'w': // 1 up
-                buttons[1][ButtonType.UP] = true;
-                timerEvent_thread.send(thisTid, "btnu1", btnDepressedTime);
-                break;
-            case 'e': // 2 up
-                buttons[2][ButtonType.UP] = true;
-                timerEvent_thread.send(thisTid, "btnu2", btnDepressedTime);
-                break;
-            case 's': // 1 dn
-                buttons[1][ButtonType.DOWN] = true;
-                timerEvent_thread.send(thisTid, "btnd1", btnDepressedTime);
-                break;
-            case 'd': // 2 dn
-                buttons[2][ButtonType.DOWN] = true;
-                timerEvent_thread.send(thisTid, "btnd2", btnDepressedTime);
-                break;
-            case 'f': // 3 dn
-                buttons[3][ButtonType.DOWN] = true;
-                timerEvent_thread.send(thisTid, "btnd3", btnDepressedTime);
-                break;
-            case 'z': // 0 cm
-                buttons[0][ButtonType.COMMAND] = true;
-                timerEvent_thread.send(thisTid, "btnc0", btnDepressedTime);
-                break;
-            case 'x': // 1 cm
-                buttons[1][ButtonType.COMMAND] = true;
-                timerEvent_thread.send(thisTid, "btnc1", btnDepressedTime);
-                break;
-            case 'c': // 2 cm
-                buttons[2][ButtonType.COMMAND] = true;
-                timerEvent_thread.send(thisTid, "btnc2", btnDepressedTime);
-                break;
-            case 'v': // 3 cm
-                buttons[3][ButtonType.COMMAND] = true;
-                timerEvent_thread.send(thisTid, "btnc3", btnDepressedTime);
-                break;
-            case 't': // stop
-                stopBtn = true;
-                timerEvent_thread.send(thisTid, "stp", btnDepressedTime);
-                break;
-            case 'g': // obst
-                obstrSwch ? (obstrSwch = false) : (obstrSwch = true);
-                break;
-            default: break;
-        }
-    }
-
-
-
 
     // --- INIT --- //
 
@@ -348,58 +223,59 @@ void thr_simulationLoop(){
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
 
-    // Create and spawn second window
-    string path = thisExePath[0..thisExePath.lastIndexOf("\\")+1];
-    std.file.write(path~"secondWindow.d", secondWindowProgram);
-    version(Windows){
-        std.process.spawnShell(("start \"\" rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
-    } else version(linux){
-        std.process.spawnShell((linux_terminal ~ " -x rdmd -w -g \"" ~ path ~ "secondWindow.d\""));
-    }
-    Thread.sleep(1.seconds);
-    std.file.remove(path~"secondWindow.d");
-
 
     // --- LOOP --- //
     printState;
     while(1){
         receive(
             (MotorDirection m){
-                // writeln("received MotorDirChange: prevDir=", prevDir, " currDir=", currDir,
-                //                                 " prevFloor=", prevFloor, " currFloor=", currFloor,
-                //                                 " m=", m);
-                currDir = m;
-                final switch(currDir) with(MotorDirection){
-                case UP:
-                    if(currFloor != -1){
-                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
-                    } else {
-                        if(prevDir == MotorDirection.UP){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor+1).to!string, travelTimeBetweenFloors);
-                            nextFloor = prevFloor+1;
+                /+
+                writeln("received MotorDirChange:",
+                    "\n  m=", m,
+                    "\n  departDir=", departDir, " currDir=", currDir,
+                    "\n  prevFloor=", prevFloor, " currFloor=", currFloor);
+                +/                
+                
+                if(m != currDir){
+                    timerEvent_thread.send(thisTid, moveEvent, CancelEvent());
+                    currDir = m;
+                    
+                    final switch(currDir) with(MotorDirection){
+                    case UP:
+                        if(currFloor != -1){
+                            moveEvent = "dep"~currFloor.to!string;
+                            timerEvent_thread.send(thisTid, moveEvent, travelTimePassingFloor);
+                            departDir = UP;
+                        } else {
+                            if(departDir == MotorDirection.UP){
+                                moveEvent = "arr"~(prevFloor+1).to!string;
+                                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                            }
+                            if(departDir == MotorDirection.DOWN){
+                                moveEvent = "arr"~(prevFloor).to!string;
+                                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                            }
                         }
-                        if(prevDir == MotorDirection.DOWN){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTimeBetweenFloors);
+                        break;
+                    case DOWN:
+                        if(currFloor != -1){
+                            moveEvent = "dep"~currFloor.to!string;
+                            timerEvent_thread.send(thisTid, moveEvent, travelTimePassingFloor);
+                            departDir = DOWN;
+                        } else {
+                            if(departDir == MotorDirection.UP){
+                                moveEvent = "arr"~(prevFloor).to!string;
+                                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                            }
+                            if(departDir == MotorDirection.DOWN){
+                                moveEvent = "arr"~(prevFloor-1).to!string;
+                                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                            }
                         }
+                        break;
+                    case STOP:
+                        break;
                     }
-                    prevDir = currDir;
-                    break;
-                case DOWN:
-                    if(currFloor != -1){
-                        timerEvent_thread.send(thisTid, "dep"~currFloor.to!string, travelTimePassingFloor);
-                    } else {
-                        if(prevDir == MotorDirection.UP){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor).to!string, travelTimeBetweenFloors);
-                        }
-                        if(prevDir == MotorDirection.DOWN){
-                            timerEvent_thread.send(thisTid, "arr"~(prevFloor-1).to!string, travelTimeBetweenFloors);
-                            nextFloor = prevFloor-1;
-                        }
-                    }
-                    prevDir = currDir;
-                    break;
-                case STOP:
-                    break;
                 }
             },
             (Tid t, string s){
@@ -410,13 +286,134 @@ void thr_simulationLoop(){
             (immutable(ubyte)[] b){
                 handleStdinEvent(b[0].to!char);
             },
-            (stateUpdated su){
+            (StateUpdated su){
+            },
+            (OwnerTerminated ot){
+                return;
             }
         );
         printState;
     }
-    } catch(Exception e){ e.writeln; throw e; }
+    } catch(Throwable t){ t.writeln; throw t; }
 }
+
+
+
+void handleTimerEvent(string s){
+    switch(s[0..3]){
+        case "arr":
+            if(currDir != MotorDirection.STOP){
+                if(s[3] == '-'  || s[3] == '4'){
+                    throw new ElevatorCrash("\nELEVATOR HAS CRASHED: \"Arrived\" at a non-existent floor\n");
+                }
+                if(currDir == MotorDirection.UP    &&  (s[3]-'0').to!int < prevFloor){ return; }
+                if(currDir == MotorDirection.DOWN  &&  (s[3]-'0').to!int > prevFloor){ return; }
+                currFloor = prevFloor = (s[3]-'0').to!int;
+                moveEvent = "dep"~currFloor.to!string;
+                timerEvent_thread.send(thisTid, moveEvent, travelTimePassingFloor);
+                return;
+            } else {
+                // ignore, elevator stopped before it reached the floor
+            }
+            return;
+
+        case "dep":
+            final switch(currDir) with(MotorDirection){
+            case UP:
+                if(s[3] == '3'){
+                    throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed top floor going upward\n");
+                }
+                currFloor = -1;
+                moveEvent = "arr"~(prevFloor+1).to!string;
+                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                departDir = UP;
+                return;
+            case DOWN:
+                if(s[3] == '0'){
+                    throw new ElevatorCrash("\nELEVATOR HAS CRASHED: Departed bottom floor going downward\n");
+                }
+                currFloor = -1;
+                moveEvent = "arr"~(prevFloor-1).to!string;
+                timerEvent_thread.send(thisTid, moveEvent, travelTimeBetweenFloors);
+                departDir = DOWN;
+                return;
+            case STOP:
+                return;
+            }
+
+        case "btn":
+            switch(s[3]){
+                case 'u': buttons[(s[4]-'0').to!int][0] = false; return;
+                case 'd': buttons[(s[4]-'0').to!int][1] = false; return;
+                case 'c': buttons[(s[4]-'0').to!int][2] = false; return;
+                default: writeln("Bad timer event received: unable to parse \"", s, "\""); return;
+            }
+
+        case "stp":
+            stopBtn = false;
+            return;
+
+        default:
+            writeln("Bad timer event received: unable to parse \"", s, "\"");
+            return;
+    }
+}
+
+
+void handleStdinEvent(char c){
+    switch(c){
+        case 'q': // 0 up
+            buttons[0][ButtonType.UP] = true;
+            timerEvent_thread.send(thisTid, "btnu0", btnDepressedTime);
+            break;
+        case 'w': // 1 up
+            buttons[1][ButtonType.UP] = true;
+            timerEvent_thread.send(thisTid, "btnu1", btnDepressedTime);
+            break;
+        case 'e': // 2 up
+            buttons[2][ButtonType.UP] = true;
+            timerEvent_thread.send(thisTid, "btnu2", btnDepressedTime);
+            break;
+        case 's': // 1 dn
+            buttons[1][ButtonType.DOWN] = true;
+            timerEvent_thread.send(thisTid, "btnd1", btnDepressedTime);
+            break;
+        case 'd': // 2 dn
+            buttons[2][ButtonType.DOWN] = true;
+            timerEvent_thread.send(thisTid, "btnd2", btnDepressedTime);
+            break;
+        case 'f': // 3 dn
+            buttons[3][ButtonType.DOWN] = true;
+            timerEvent_thread.send(thisTid, "btnd3", btnDepressedTime);
+            break;
+        case 'z': // 0 cm
+            buttons[0][ButtonType.COMMAND] = true;
+            timerEvent_thread.send(thisTid, "btnc0", btnDepressedTime);
+            break;
+        case 'x': // 1 cm
+            buttons[1][ButtonType.COMMAND] = true;
+            timerEvent_thread.send(thisTid, "btnc1", btnDepressedTime);
+            break;
+        case 'c': // 2 cm
+            buttons[2][ButtonType.COMMAND] = true;
+            timerEvent_thread.send(thisTid, "btnc2", btnDepressedTime);
+            break;
+        case 'v': // 3 cm
+            buttons[3][ButtonType.COMMAND] = true;
+            timerEvent_thread.send(thisTid, "btnc3", btnDepressedTime);
+            break;
+        case 't': // stop
+            stopBtn = true;
+            timerEvent_thread.send(thisTid, "stp", btnDepressedTime);
+            break;
+        case 'g': // obst
+            obstrSwch = !obstrSwch;
+            break;
+        default: break;
+    }
+}
+
+
 
 void thr_controlPanelInput(){
     scope(exit){ writeln(__FUNCTION__, " died"); }
@@ -432,44 +429,36 @@ void thr_controlPanelInput(){
     }
 }
 
+
+
 void printState(){
 
-    string fmt = "%-(%s\n%)";
-
-
     char[][] bg = [
-        "+---------------+ +-+---------------+----+",
-        "|               | |u|  0  1  2      | o  |",
-        "| 0 - 1 - 2 - 3 | |d|     1  2  3   | d  |",
-        "|       -       | |c|  0  1  2  3   | s  |",
-        "+---------------+ +-+---------------+----+" ].to!(char[][]);
+        "+---------------+ +----+--------------+---------+",
+        "|               | |  up| 0  1  2      | obstr:  |",
+        "| 0 - 1 - 2 - 3 | |down|    1  2  3   | door:   |",
+        "|       -       | | cmd| 0  1  2  3   | stop:   |",
+        "+---------------+ +----+--------------+---------+" ].to!(char[][]);
+
+/+
+    writeln("debug printState:",
+        " departDir=", departDir,
+        " currDir=", currDir,
+        " prevFloor=", prevFloor,
+        " currFloor=", currFloor);
++/
 
 
     // Elevator position
     if(currFloor != -1){
         bg[1][2+currFloor*4] = '#';
     } else {
-//        writeln("debug printState: prevDir=", prevDir,
-//                                " currDir=", currDir,
-//                                " prevFloor=", prevFloor,
-//                                " currFloor=", currFloor,
-//                                " nextFloor=", nextFloor);
-
-        if(nextFloor > prevFloor){
+        if(departDir == MotorDirection.UP){
             bg[1][4+prevFloor*4] = '#';
         }
-        if(nextFloor < prevFloor){
+        if(departDir == MotorDirection.DOWN){
             bg[1][0+prevFloor*4] = '#';
         }
-        if(nextFloor == prevFloor){
-            if(prevDir == MotorDirection.UP){
-                bg[1][4+prevFloor*4] = '#';
-            }
-            if(prevDir == MotorDirection.DOWN){
-                bg[1][0+prevFloor*4] = '#';
-            }
-        }
-
     }
 
     // Elevator Direction
@@ -481,27 +470,25 @@ void printState(){
     }
 
     // Button lights
-    foreach(i, a; lights){ //0..3
-        foreach(j, b; a){  //0..2
-            if(b){
-                bg[j+1][24+i*3] = '*';
+    foreach(floor, lightsAtFloor; lights){ //0..3
+        foreach(light, on; lightsAtFloor){  //0..2
+            if(on){
+                bg[light+1][26+floor*3] = '*';
             }
         }
     }
     // Other lights
     bg[2][3+flrIndLight*4] = '*';
-    if(obstrSwch){
-        bg[1][39] = '^';
-    }
+    bg[1][46] = obstrSwch ? 'v' : '^';
     if(doorLight){
-        bg[2][39] = '*';
+        bg[2][46] = '*';
     }
     if(stpBtnLight){
-        bg[3][39] = '*';
+        bg[3][46] = '*';
     }
 
     auto c = printCount++.to!(char[]);
-    bg[4][41-c.length..41] = c[0..$];
+    bg[4][48-c.length..48] = c[0..$];
 
     sock.sendTo(bg.reduce!((a, b) => a ~ "\n" ~ b), addr);
 
@@ -514,88 +501,8 @@ class ElevatorCrash : Exception {
     }
 }
 
-struct stateUpdated {}
+struct StateUpdated {}
 
-string secondWindowProgram(){
-    return q{
-        import  std.stdio,
-                std.socket,
-                std.concurrency,
-                std.file,
-                std.getopt,
-                std.string,
-                std.c.process,
-                core.thread;
-
-        shared ushort comPortToDisplay      = 40000;
-        shared ushort comPortFromDisplay    = 40001;
-
-
-        shared static this(){
-            string[] configContents;
-            try {
-                configContents = readText("ElevatorConfig.con").split;
-                getopt( configContents,
-                    std.getopt.config.passThrough,
-                    "simulationElevator_comPortToDisplay",          &comPortToDisplay,
-                    "simulationElevator_comPortFromDisplay",        &comPortFromDisplay,
-                );
-            } catch(Exception e){
-                writeln("Unable to load simulationElevator config: ", e.msg);
-            }
-        }
-
-
-        void thr_controlPanelInput(shared UdpSocket _sock){
-            scope(exit){ writeln(__FUNCTION__, " died"); }
-
-            auto    addr    = new InternetAddress("localhost", comPortFromDisplay);
-            auto    sock    = cast(UdpSocket)_sock;
-
-            version(Windows){
-                import core.sys.windows.windows;
-                SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
-            }
-            while(1){
-                foreach(ubyte[] buf; stdin.byChunk(1)){
-                    sock.sendTo(buf, addr);
-                    version(Windows){
-                        SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), ENABLE_PROCESSED_INPUT);
-                    }
-                }
-            }
-        }
-
-        void main(){
-            scope(exit){ writeln(__FUNCTION__, " died"); }
-            auto    addr    = new InternetAddress("localhost", comPortToDisplay);
-            auto    sock    = new UdpSocket();
-
-            ubyte[2048]     buf;
-
-            sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-            sock.bind(addr);
-
-            spawn( &thr_controlPanelInput, cast(shared)sock );
-
-            void cls(){
-                version(Windows){
-                    system("CLS");
-                }
-                version(linux){
-                    system("clear");
-                }
-            }
-            cls;
-            while(sock.receiveFrom(buf) > 0){
-                cls;
-                writeln(cast(string)buf);
-                buf.destroy;
-            }
-        }
-    };
-
-}
 
 }
 

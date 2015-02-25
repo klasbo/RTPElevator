@@ -44,8 +44,6 @@ ElevatorConfig
 --comediElevator_motorSpeed                         500
 
 --elevatorDriver_pollRate_ms                        10
-
---OS_linux_terminal                                 $TERM
 EOS"
         );
     }
