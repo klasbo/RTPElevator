@@ -32,14 +32,14 @@ private {
     }
 }
 
-ElevatorState[ID_t] filterAlive(ElevatorState[ID_t] states, ID_t[] alivePeers){
+ElevatorState[ID] filterAlive(ElevatorState[ID] states, ID[] alivePeers){
     return
     states.keys.zip(states.values)
     .filter!(a => alivePeers.canFind(a[0]))
     .assocArray;
 }
 
-GeneralizedElevatorState generalize(ElevatorState state, ID_t ID, ExternalOrder[][] externalOrders){
+GeneralizedElevatorState generalize(ElevatorState state, ID id, ExternalOrder[][] externalOrders){
     return GeneralizedElevatorState(
         state.floor,
         state.dirn,
@@ -50,7 +50,7 @@ GeneralizedElevatorState generalize(ElevatorState state, ID_t ID, ExternalOrder[
             ordersAtFloor
             .map!(order =>
                 order.status == ExternalOrder.Status.active  &&
-                order.assignedID == ID
+                order.assigned == id
             )
             .array
         )
@@ -58,11 +58,11 @@ GeneralizedElevatorState generalize(ElevatorState state, ID_t ID, ExternalOrder[
         .map!(a => a[0] ~ a[1])
         .array,
 
-        ID
+        id
     );
 }
 
-GeneralizedElevatorState[] generalize(ElevatorState[ID_t] states, ExternalOrder[][] externalOrders){
+GeneralizedElevatorState[] generalize(ElevatorState[ID] states, ExternalOrder[][] externalOrders){
     return
     states.values.zip(states.keys)
     .map!(a =>
@@ -84,7 +84,7 @@ GeneralizedElevatorState[] augment(GeneralizedElevatorState[] states, btnPressEv
             ( b = a.orders.map!(a=>a.dup).array,
               b[bpe.floor][bpe.btn] = true,
               b),
-            a.ID
+            a.id
         )
     )
     .array;
@@ -176,7 +176,7 @@ string ack(int floor, ButtonType btn){
 /++ Only current algorithm is "time until all orders are done".
         Passing floor and btn does nothing.
 +/
-ID_t bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn = ButtonType.COMMAND){
+ID bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn = ButtonType.COMMAND){
 
     static ulong timeUntilAllDone(GeneralizedElevatorState s){
     
@@ -240,7 +240,7 @@ ID_t bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn =
             , "  : ",   (topDestination - bottomDestination)
             , " ",      (topDestination - bottomRetroDestination)
             , " ",      (topRetroDestination - bottomDestination)
-            , "  \t", s.ID, "\n"
+            , "  \t", s.id, "\n"
         );
         +/
 
@@ -261,6 +261,6 @@ ID_t bestFit(GeneralizedElevatorState[] states, int floor = -1, ButtonType btn =
         .array
         .sort!((a,b) => a[1] < b[1])
         .front[0]
-        .ID;
+        .id;
 
 }

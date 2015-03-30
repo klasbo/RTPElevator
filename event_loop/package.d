@@ -62,8 +62,8 @@ private {
 
     /// ----- VARIABLES ----- ///
     ExternalOrder[][]       externalOrders;
-    ElevatorState[ID_t]     states;
-    ID_t[]                  alivePeers;
+    ElevatorState[ID]       states;
+    ID[]                    alivePeers;
 
     /// ----- CONFIG ----- ///
     shared uint     reassignMinTime_s   = 3;
@@ -215,14 +215,14 @@ private {
                         case inactive:
                             // add to externalOrders
                             externalOrders[om.floor][om.btn].status = pending;
-                            externalOrders[om.floor][om.btn].assignedID = om.assignedID;
+                            externalOrders[om.floor][om.btn].assigned = om.assigned;
                             externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                             // reply with ackOrder from this
                             networkTid.send(OrderMsg(
-                                om.assignedID,
+                                om.assigned,
                                 om.floor,
                                 om.btn,
-                                om.orderOriginID,
+                                om.orderOrigin,
                                 thisPeerID,
                                 MessageType.ackOrder
                             ).to!string);
@@ -235,28 +235,28 @@ private {
                             //          > light will not be turned on, user presses button again
                             break;
                         case active:
-                            if(!alivePeers.canFind(externalOrders[om.floor][om.btn].assignedID)){
+                            if(!alivePeers.canFind(externalOrders[om.floor][om.btn].assigned)){
                                 goto case inactive;
                             }
                             //  ok: will happen if either:
-                            //      on reassignUnlinkedOrders (implies that om.assignedID != order.assignedID)
+                            //      on reassignUnlinkedOrders (implies that om.assigned != order.assigned)
                             //          - This is intentional
                             //      another elevators external order is not active (information mismatch)
                             //          > the order already exists on this elevator, so another elevator should show up
-                            //          possible remedy: send confirmedOrder to messageOriginID with current info
+                            //          possible remedy: send confirmedOrder to messageOrigin with current info
                             break;
                         }
                         break;
 
                     case ackOrder:
-                        if(om.orderOriginID == thisPeerID){
+                        if(om.orderOrigin == thisPeerID){
                             final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
                             case inactive:
                                 //  ok: Only makes sense to accept ack's of pending orders where origin = this
                                 writeln("Warning: Refused an acknowledgement of an order that is inactive");
                                 break;
                             case pending:
-                                externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOriginID;
+                                externalOrders[om.floor][om.btn].hasConfirmed ~= om.msgOrigin;
                                 // if all alive peers have ack'd
                                 //   send confirmedOrder
                                 if( alivePeers
@@ -265,10 +265,10 @@ private {
                                     .empty)
                                 {
                                     networkTid.send(OrderMsg(
-                                        om.assignedID,
+                                        om.assigned,
                                         om.floor,
                                         om.btn,
-                                        om.orderOriginID,
+                                        om.orderOrigin,
                                         thisPeerID,
                                         MessageType.confirmedOrder
                                     ).to!string);
@@ -287,8 +287,8 @@ private {
                     case confirmedOrder:
                         final switch(externalOrders[om.floor][om.btn].status) with(ExternalOrder.Status){
                         case inactive:
-                            if(om.msgOriginID != thisPeerID){
-                                externalOrders[om.floor][om.btn].assignedID = om.assignedID;
+                            if(om.msgOrigin != thisPeerID){
+                                externalOrders[om.floor][om.btn].assigned = om.assigned;
                                 externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                                 goto case pending;
                             } else {
@@ -311,9 +311,9 @@ private {
                             }
                             break;
                         case active:
-                            if(externalOrders[om.floor][om.btn].assignedID != om.assignedID){
+                            if(externalOrders[om.floor][om.btn].assigned != om.assigned){
                                 //  ok: Order is already "in the system", but there is a disagreement on who is taking it (information mismatch).
-                                writeln("Warning: confirmedOrder.assignedID is not the same as externalOrders.assignedID\n",
+                                writeln("Warning: confirmedOrder.assigned is not the same as externalOrders.assigned\n",
                                         "    ", om, "\n    ", externalOrders[om.floor][om.btn]);
                             } else {
                                 //  ok: Order is already "in the system"
@@ -326,7 +326,7 @@ private {
                         //  No reason to _not_ clear the order, even if it isn't active
                         //      This may mean that an unassigned elevator clears an order, which is ok.
                         externalOrders[om.floor][om.btn].status = ExternalOrder.Status.inactive;
-                        externalOrders[om.floor][om.btn].assignedID = 0;
+                        externalOrders[om.floor][om.btn].assigned = 0;
                         externalOrders[om.floor][om.btn].hasConfirmed.destroy;
                         elevator.SetLight(om.floor, cast(Light)om.btn, false);
                         break;
@@ -343,15 +343,15 @@ private {
                     }
                 },
                 (StateRestoreRequest srr){
-                    if(srr.askerID == thisPeerID){
+                    if(srr.asker == thisPeerID){
                         return;
                     }
                     networkTid.send(wrappedState);
-                    if(srr.askerID in states){
+                    if(srr.asker in states){
                         networkTid.send(
                             StateRestoreInfo(
-                                srr.askerID,
-                                states[srr.askerID].to!string
+                                srr.asker,
+                                states[srr.asker].to!string
                             )
                             .to!string
                         );
@@ -360,7 +360,7 @@ private {
                         foreach(btn, order; row){
                             if(order.status == ExternalOrder.Status.active){
                                 networkTid.send(OrderMsg(
-                                    order.assignedID,
+                                    order.assigned,
                                     floor.to!int,
                                     cast(ButtonType)btn,
                                     thisPeerID,
@@ -419,7 +419,7 @@ private {
                         if(s == reassignUnlinkedOrders){
                             foreach(floor, row; externalOrders){
                                 foreach(btn, order; row){
-                                    if(order.status == ExternalOrder.Status.active  &&  !alivePeers.canFind(order.assignedID)){
+                                    if(order.status == ExternalOrder.Status.active  &&  !alivePeers.canFind(order.assigned)){
                                         networkTid.send(OrderMsg(
                                             states
                                                 .filterAlive(alivePeers)

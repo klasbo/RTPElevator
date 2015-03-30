@@ -1,7 +1,7 @@
 module event_loop.types;
 
 
-public import network.udp_p2p : ID_t;
+public import network.udp_p2p : ID;
 public import elevator_driver.i_elevator : ButtonType, MotorDirection;
 
 struct initDone {}
@@ -15,7 +15,7 @@ struct ElevatorState {
 }
 struct ElevatorStateWrapper {
     string          content;
-    ID_t            belongsTo;
+    ID              belongsTo;
 }
 struct ExternalOrder {
     enum Status {
@@ -24,8 +24,8 @@ struct ExternalOrder {
         active
     }
     Status          status;
-    ID_t            assignedID;
-    ID_t[]          hasConfirmed;
+    ID              assigned;
+    ID[]            hasConfirmed;
 }
 
 struct GeneralizedElevatorState {
@@ -33,18 +33,18 @@ struct GeneralizedElevatorState {
     MotorDirection  dirn;
     bool            moving;
     bool[][]        orders;
-    ID_t            ID;
+    ID              id;
 }
 
 struct OrderMsg {
     // order description
-    ID_t            assignedID;
+    ID              assigned;
     int             floor;
     ButtonType      btn;
 
     // meta
-    ID_t            orderOriginID;
-    ID_t            msgOriginID;
+    ID              orderOrigin;
+    ID              msgOrigin;
     MessageType     msgType;
 }
 enum MessageType {
@@ -55,9 +55,9 @@ enum MessageType {
 }
 
 struct StateRestoreRequest {
-    ID_t            askerID;
+    ID              asker;
 }
 struct StateRestoreInfo {
-    ID_t            belongsTo;
+    ID              belongsTo;
     string          stateString;
 }

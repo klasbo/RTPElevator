@@ -29,16 +29,16 @@ public {
         return t;
     }
 
-    ID_t thisPeerID(){
-        return (_thisPeerID + IDOffset);
+    ID thisPeerID(){
+        return (_thisPeerID + idOffset);
     }
 
     struct peerListUpdate {
-        immutable(ID_t)[] peers;
+        immutable(ID)[] peers;
         alias peers this;
     }
 
-    alias ID_t = int;
+    alias ID = int;
 }
 
 shared static this(){
@@ -47,7 +47,7 @@ shared static this(){
         configContents = readText("ElevatorConfig.con").split;
         getopt( configContents,
             std.getopt.config.passThrough,
-            "network_IDOffset",                 &IDOffset,
+            "network_IDOffset",                 &idOffset,
             "network_iAmAliveSendInterval_ms",  &iAmAliveSendInterval_ms,
             "network_iAmAliveTimeout_ms",       &iAmAliveTimeout_ms,
             "network_iAmAlivePort",             &iAmAlivePort,
@@ -62,14 +62,14 @@ private {
     shared string       localIP;
     shared string       broadcastIP;
     shared ubyte        _thisPeerID;
-    shared ID_t         IDOffset                = 0;
+    shared ID           idOffset                = 0;
     shared uint         iAmAliveSendInterval_ms = 300;
     shared uint         iAmAliveTimeout_ms      = 1000;
     shared ushort       iAmAlivePort            = 22222;
     shared ushort       msgPort                 = 22223;
 
     enum                msgBufsize              = 1024;
-    enum                aliveBufsize            = ID_t.sizeof;
+    enum                aliveBufsize            = ID.sizeof;
 
     struct msgFromNetwork {
         string msg;
@@ -121,15 +121,15 @@ private {
 
         auto    addr                    = new InternetAddress(broadcastIP, iAmAlivePort);
         auto    sock                    = new UdpSocket();
-        ubyte[] ID                      = new ubyte[](aliveBufsize);
+        ubyte[] id                      = new ubyte[](aliveBufsize);
         auto    iAmAliveSendInterval    = iAmAliveSendInterval_ms.msecs;
-        ID.write!(ID_t)(thisPeerID, 0);
+        id.write!(ID)(thisPeerID, 0);
 
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
         sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
         while(true){
-            sock.sendTo(ID, addr);
+            sock.sendTo(id, addr);
             Thread.sleep(iAmAliveSendInterval);
         }
         } catch(Throwable t){ t.writeln; throw t; }
@@ -143,9 +143,9 @@ private {
         auto    sock                    = new UdpSocket();
         auto    iAmAliveTimeout         = iAmAliveTimeout_ms.msecs;
 
-        ID_t            ID;
+        ID              id;
         ubyte[]         buf             = new ubyte[](aliveBufsize);
-        SysTime[ID_t]   lastSeen;
+        SysTime[ID]     lastSeen;
         bool            listHasChanges;
 
 
@@ -159,13 +159,13 @@ private {
             buf[]           = 0;
 
             sock.receiveFrom(buf);
-            ID = buf.peek!ID_t;
+            id = buf.peek!ID;
 
-            if(ID != 0){
-                if(ID !in lastSeen){
+            if(id != 0){
+                if(id !in lastSeen){
                     listHasChanges = true;
                 }
-                lastSeen[ID] = Clock.currTime;
+                lastSeen[id] = Clock.currTime;
             }
 
             foreach(k, v; lastSeen){
