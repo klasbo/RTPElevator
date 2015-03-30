@@ -127,7 +127,7 @@ private {
                 (StateRestoreInfo sri){
                     if(sri.belongsTo == thisPeerID){
                         writeln("  New state restore info: ", sri);
-                        auto prevState = ElevatorState(sri.stateString);
+                        auto prevState = sri.stateString.construct!ElevatorState;
                         if(prevState.internalOrders.length == states[thisPeerID].internalOrders.length){
                             states[thisPeerID].internalOrders =
                                 states[thisPeerID].internalOrders.zip(prevState.internalOrders)
@@ -339,7 +339,7 @@ private {
                 (ElevatorStateWrapper essw){
                     if(essw.belongsTo != thisPeerID){
                         writeln("  New elevator state: ", essw);
-                        states[essw.belongsTo] = ElevatorState(essw.content);
+                        states[essw.belongsTo] = essw.content.construct!ElevatorState;
                     }
                 },
                 (StateRestoreRequest srr){
