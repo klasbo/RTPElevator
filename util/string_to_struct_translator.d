@@ -3,6 +3,7 @@ module util.string_to_struct_translator;
 import  std.traits,
         std.concurrency,
         std.string,
+        std.stdio,
         std.conv,
         std.range,
         std.algorithm;
@@ -17,10 +18,14 @@ template stringToStructTranslator_thr(T...){
                         static if(is(t == struct)){ 
                             static if(!std.traits.hasUnsharedAliasing!t){
                             
-                    if(s.startsWith(t.stringof)){
-                        ownerTid.send(s.construct!t);
-                        return;
-                    }
+                                if(s.startsWith(t.stringof)){
+                                    try {
+                                        ownerTid.send(s.construct!t);
+                                    } catch(Exception e){
+                                        writeln("Construction of type ", t.stringof, " failed: ", e.msg);
+                                    }
+                                    return;
+                                }
                     
                             } else {
                                 static assert(false, "stringToStructTranslator types must not have unshared aliasing. (Violated by " ~ t.stringof ~ ")");
