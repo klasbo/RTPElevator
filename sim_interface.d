@@ -75,7 +75,8 @@ void main(){
         }
     }
     cls;
-    while(sock.receiveFrom(buf) > 0){
+    while(true){
+        sock.receiveFrom(buf);
         cls;
         writeln(cast(string)buf);
         buf.destroy;
