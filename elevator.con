@@ -1,0 +1,26 @@
+elevator.con
+
+
+--elevio_elevtype                           simulation
+
+--id                                        1
+
+--feeds_elevioReader_pollrate               25
+
+--feeds_peerList_port                       16567
+--feeds_peerList_timeout                    350
+--feeds_peerList_interval                   100
+
+--feeds_elevatorStates_port                 16568
+--feeds_elevatorStates_bufSize              1024
+--feeds_elevatorStates_minPeriod            1000
+
+--feeds_requestConsensusCab_port            16569
+--feeds_requestConsensusHall_port           16570
+--feeds_requestConsensus_bufSize            1024
+--feeds_requestConsensus_minPeriod          100
+--feeds_requestConsensus_maxPeriod          150
+
+--feeds_elevatorControl_doorOpenDuration    3000
+--feeds_elevatorControl_travelTimeEstimate  2500
+
