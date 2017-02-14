@@ -36,9 +36,9 @@ void thr(){
     subscribe!LocallyAssignedRequests;
     
     ElevatorState e = {
-        floor :     0,
+        floor :     -1,
         dirn :      Dirn.stop,
-        behaviour : ElevatorBehaviour.idle,
+        behaviour : ElevatorBehaviour.uninitialized,
         requests :  new bool[3][](numFloors),
     };
     auto doorTime = feeds_elevatorControl_doorOpenDuration.msecs;
@@ -47,7 +47,6 @@ void thr(){
     {
         auto floor = floorSensor();
         if(floor == -1){
-            e.behaviour = ElevatorBehaviour.moving;
             e.dirn = Dirn.down;
             motorDirection(e.dirn);            
         } else {
