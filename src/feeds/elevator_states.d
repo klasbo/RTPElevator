@@ -15,13 +15,13 @@ import net.udp_bcast;
 
 
 struct ElevatorStates {
-    shared LocalElevatorStateImm[ubyte] states;
+    shared LocalElevatorState[ubyte] states;
     alias states this;
 }
 
 private struct EStateMsg {
     ubyte id;
-    LocalElevatorStateImm state;
+    LocalElevatorState state;
 }
 
 void thr(){
@@ -34,13 +34,13 @@ void thr(){
     };
     Tid netTx = net.udp_bcast.init!(EStateMsg)(thisTid, netcfg);
     
-    subscribe!LocalElevatorStateImm;
+    subscribe!LocalElevatorState;
 
-    LocalElevatorStateImm[ubyte] states;
+    LocalElevatorState[ubyte] states;
     
     while(true){
         bool timeout = !receiveTimeout(feeds_elevatorStates_minPeriod.msecs,
-            (LocalElevatorStateImm a){
+            (LocalElevatorState a){
                 states[id] = a;
                 netTx.send(EStateMsg(id, states[id]));
                 publish(ElevatorStates(cast(shared)states.dup));

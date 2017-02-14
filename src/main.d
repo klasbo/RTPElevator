@@ -39,6 +39,7 @@ void main(){
     
     subscribe!FloorSensor;
     subscribe!PeerList;
+    subscribe!LocalCabRequests;
     subscribe!ActiveCabRequests;
     subscribe!ActiveHallRequests;
     subscribe!ElevatorStates;
@@ -46,8 +47,12 @@ void main(){
     
     while(true){
         receive(
-            (ActiveCabRequests a){
+            (LocalCabRequests a){
                 writefln("[Log]: %s\n     %(%s %)\n    [%(%d %)]",
+                    typeid(a), iota(numFloors), a);
+            },
+            (ActiveCabRequests a){
+                writefln("[Log]: %s\n         %(%s %)\n%(  %3d : [%(%d %)]%|\n%)",
                     typeid(a), iota(numFloors), a);
             },
             (ActiveHallRequests a){
@@ -59,7 +64,7 @@ void main(){
                     typeid(a), iota(numFloors), a.map!(r => r.array).array.transposed);
             },
             (ElevatorStates a){
-                writefln("[Log]: %s\n%(    %3d : %s\n%)", 
+                writefln("[Log]: %s\n%(  %3d : %s\n%)", 
                     typeid(a), a);
             },
             (Variant a){
@@ -75,9 +80,6 @@ TODO
 
 whatif elev_ctrl does not publish state for elev_states to broadcast? periodic thing in elev_ctrl?
     mostly relevant for init, make sure other e's know about us
-cab request removed from localelevatorstate 
-    hall_request_assigner needs to sub to activeCabRequests
-    rename activeCabRequests to localActiveCabRequests
 peer feed subscribe to elev_ctrl errors, or maybe just errors in general (multi-publisher)
 look into feed autorestart, should be doable with spawnlinked maybe
     LinkTerminated.tid. list of threadfn's and list of tids, lookup corresponding idx and respawn

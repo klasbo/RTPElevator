@@ -21,7 +21,7 @@ struct LocallyAssignedRequests {
 void thr(){
     try {
     subscribe!LocallyAssignedHallRequests;
-    subscribe!ActiveCabRequests;
+    subscribe!LocalCabRequests;
     
     auto reqs = new bool[3][](numFloors);
     
@@ -34,7 +34,7 @@ void thr(){
                     }
                 }
             },
-            (ActiveCabRequests a){
+            (LocalCabRequests a){
                 foreach(int floor, ref req; a){
                     reqs[floor][Call.cab] = req;
                 }

@@ -9,6 +9,7 @@ import std.format;
 import std.random;
 import std.range;
 import std.stdio;
+import std.typecons;
 
 import elev_config;
 import feed;
@@ -27,7 +28,12 @@ import fns.request_consensus;
 
 
 struct ActiveCabRequests {
-    immutable(bool)[] requests;
+    shared bool[][ubyte] requests;
+    alias requests this;
+}
+
+struct LocalCabRequests {
+    immutable (bool)[] requests;
     alias requests this;
 }
 
@@ -53,6 +59,9 @@ void thr(){
     Req[][ubyte]    requests = [id : new Req[](numFloors)];
     ubyte[]         peers;
 
+    publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
+    publish(LocalCabRequests(requests.localActiveCabRequests.idup));
+    
     while(true){
         Duration period = uniform(feeds_requestConsensus_minPeriod, feeds_requestConsensus_maxPeriod).msecs;
         bool timeout = !receiveTimeout(period,
@@ -70,6 +79,7 @@ void thr(){
                 foreach(ubyte remoteID, ref requestsForID; recvdRequests){
                     if(remoteID !in requests){
                         requests[remoteID] = requestsForID;
+                        publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
                     }
                     
                     foreach(floor, ref remote; requestsForID){                    
@@ -82,10 +92,12 @@ void thr(){
                             a.owner,
                             peers,
                             (){
-                                publish(ActiveCabRequests(requests.localActiveCabRequests.idup));
+                                publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
+                                publish(LocalCabRequests(requests.localActiveCabRequests.idup));    // if ours.. ?
                             },
                             (){
-                                publish(ActiveCabRequests(requests.localActiveCabRequests.idup));
+                                publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
+                                publish(LocalCabRequests(requests.localActiveCabRequests.idup));
                             }
                         );
                     }
@@ -114,7 +126,8 @@ void thr(){
                     requests.print;
                     writeln;
                 }
-                publish(ActiveCabRequests(requests.localActiveCabRequests.idup));
+                publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
+                publish(LocalCabRequests(requests.localActiveCabRequests.idup));
             },
             (PeerList a){
                 peers = a.dup.sort().array;
@@ -187,6 +200,9 @@ bool[] localActiveCabRequests(Req[][ubyte] reqs){
     return reqs[id].map!(a => (a.state == ReqState.active)).array;
 }
 
+bool[][ubyte] activeCabRequests(Req[][ubyte] reqs){
+    return reqs.keys.zip(reqs.values).map!(a => tuple(a[0], a[1].map!(b => (b.state == ReqState.active)).array)).assocArray;
+}
 
 
 

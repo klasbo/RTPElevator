@@ -54,7 +54,7 @@ void thr(){
             e.floor = floor;
         }
     }
-    publish(e.local.imm);
+    publish(e.local);
     
     auto publishCompletedRequest = (Call c){
         final switch(c) with(Call){
@@ -156,7 +156,7 @@ void thr(){
             }
         );
         if(e != prevState){
-            publish(e.local.imm);
+            publish(e.local);
         }
     }
     } catch(Throwable t){ t.writeln; throw(t); }

@@ -6,6 +6,7 @@ import std.stdio;
 
 import elev_config;
 import feed;
+import feeds.request_consensus_cab;
 import feeds.request_consensus_hall;
 import feeds.peer_list;
 import feeds.elevator_states;
@@ -19,16 +20,21 @@ struct LocallyAssignedHallRequests {
 
 void thr(){
     try {
+    subscribe!ActiveCabRequests;
     subscribe!ActiveHallRequests;
     subscribe!ElevatorStates;
     subscribe!PeerList;
     
     bool[2][]                   hallReqs        = new bool[2][](numFloors);
+    bool[][ubyte]               cabReqs         = [id : new bool[](numFloors)];
     LocalElevatorState[ubyte]   elevatorStates;
     ubyte[]                     peerList;
     
     while(true){
         receive(
+            (ActiveCabRequests a){
+                cabReqs = (cast(bool[][ubyte])(a.requests)).dup;
+            },
             (ActiveHallRequests a){
                 hallReqs = a.dup;
             },
@@ -39,9 +45,10 @@ void thr(){
                 peerList = a.dup;
             },
         );
+        
         publish(
             LocallyAssignedHallRequests(
-                optimalHallRequests(id, hallReqs, elevatorStates, peerList).idup
+                optimalHallRequests(id, hallReqs, cabReqs, elevatorStates, peerList).idup
             )
         );
     }    

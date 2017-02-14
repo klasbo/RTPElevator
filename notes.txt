@@ -20,22 +20,20 @@ feeds
         in
             CallButton
         out
-            NewHallRequest
-            NewCabRequest
+            HallCall
+            CabCall
     request_consensus_hall
         net
         in
-            NewHallRequest
+            HallCall
             CompletedHallRequest
             PeerList
         out
             ActiveHallRequests
-            NewActiveHallRequest
-            RemoteCompletedHallRequest[?]
     request_consensus_cab
         net
         in
-            NewCabRequest
+            CabCall
             CompletedCabRequest
             PeerList
         out

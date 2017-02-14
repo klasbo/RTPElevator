@@ -8,7 +8,7 @@ import feeds.request_consensus_hall;
 import feeds.request_consensus_cab;
 
 void thr(){
-    subscribe!ActiveCabRequests;
+    subscribe!LocalCabRequests;
     subscribe!ActiveHallRequests;
     while(true){
         receive(
@@ -19,7 +19,7 @@ void thr(){
                     }
                 }
             },
-            (ActiveCabRequests a){
+            (LocalCabRequests a){
                 foreach(floor, req; a){
                     callButtonLight(floor, Call.cab, req);
                 }
