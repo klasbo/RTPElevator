@@ -4,6 +4,7 @@ import std.algorithm;
 import std.concurrency;
 import std.range;
 import std.stdio;
+import std.traits;
 
 
 import elev_config;
@@ -20,18 +21,47 @@ import feeds.elevator_states;
 import feeds.request_muxer;
 
 
+
+
+void feedSupervisor(F...)(){
+    struct Child {
+        string name;
+        Tid tid;
+        void function() fn;
+    }
+
+    Child[] children;
+    foreach(fn; F){
+        children ~= Child(fullyQualifiedName!fn, spawnLinked(&fn), &fn);
+    }    
+    while(true){
+        receive(
+            (LinkTerminated lt){
+                auto i = children.countUntil!(a => a.tid == lt.tid);
+                writefln("[Feed-Supervisor]: %s\n     %s",
+                    typeid(lt), children[i].name);
+                unsubscribeAll(lt.tid);
+                children[i].tid = spawnLinked(children[i].fn);
+            }
+        );
+    }
+}
+
 void main(){
-    spawn(&feeds.button_lights.thr);
-    spawn(&feeds.call_button_demuxer.thr);
-    spawn(&feeds.elevator_control.thr);
-    spawn(&feeds.elevio_reader.thr);
-    spawn(&feeds.floor_indicator.thr);
-    spawn(&feeds.request_consensus_cab.thr);
-    spawn(&feeds.request_consensus_hall.thr);
-    spawn(&feeds.peer_list.thr);
-    spawn(&feeds.request_muxer.thr);
-    spawn(&feeds.elevator_states.thr);
-    spawn(&feeds.hall_request_assigner.thr);
+
+    spawn(&feedSupervisor!(
+        feeds.button_lights.thr,
+        feeds.call_button_demuxer.thr,
+        feeds.elevator_control.thr,
+        feeds.elevio_reader.thr,
+        feeds.floor_indicator.thr,
+        feeds.request_consensus_cab.thr,
+        feeds.request_consensus_hall.thr,
+        feeds.peer_list.thr,
+        feeds.request_muxer.thr,
+        feeds.elevator_states.thr,
+        feeds.hall_request_assigner.thr,
+    ));
 
 
     writeln("Initialized");
@@ -77,12 +107,5 @@ void main(){
 /+
 TODO
 ----
-
-whatif elev_ctrl does not publish state for elev_states to broadcast? periodic thing in elev_ctrl?
-    mostly relevant for init, make sure other e's know about us
 peer feed subscribe to elev_ctrl errors, or maybe just errors in general (multi-publisher)
-look into feed autorestart, should be doable with spawnlinked maybe
-    LinkTerminated.tid. list of threadfn's and list of tids, lookup corresponding idx and respawn
-    feeds.cleanup(Tid t) removes all instances of t subscribing to something
-
 +/
