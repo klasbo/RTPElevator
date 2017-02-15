@@ -69,7 +69,7 @@ shared static this(){
     }
     
     // Reset lights
-    for(auto c = Call.min; c <= Call.max; c++){
+    for(auto c = CallType.min; c <= CallType.max; c++){
         foreach(f; 0..numFloors){
             callButtonLight(f, c, false);
         }
@@ -117,7 +117,7 @@ void motorDirection(Dirn d){
     }
 }
 
-void callButtonLight(int floor, Call call, bool on){
+void callButtonLight(int floor, CallType call, bool on){
     final switch(elevio_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [2, cast(ubyte)call, cast(ubyte)floor, cast(ubyte)on];
@@ -168,7 +168,7 @@ void stopButtonLight(bool on){
 
 
 
-bool callButton(int floor, Call call){
+bool callButton(int floor, CallType call){
     final switch(elevio_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [6, cast(ubyte)call, cast(ubyte)floor, 0];

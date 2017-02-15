@@ -14,12 +14,11 @@ import std.typecons;
 import elev_config;
 import feed;
 
-import feeds.call_button_demuxer;
+import feeds.elevio_reader;
 import feeds.peer_list;
 import feeds.elevator_control;
 
 import net.udp_bcast;
-public import elevio.elev_types : HallCall;
 
 import fns.request_consensus;
 
@@ -52,7 +51,7 @@ void thr(){
 
     subscribe!PeerList;
     subscribe!LostPeers;
-    subscribe!CabRequest;
+    subscribe!CabCall;
     subscribe!CompletedCabRequest;
 
 
@@ -111,7 +110,7 @@ void thr(){
                     }
                 }
             },
-            (CabRequest a){
+            (CabCall a){
                 requests[id][a].activate(id);
                 debug(request_consensus_cab){
                     writeln("New request: ", a);

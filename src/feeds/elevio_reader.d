@@ -10,21 +10,35 @@ import std.string;
 import elev_config;
 import feed;
 import elevio.elev;
-public import elevio.elev : Call;
+public import elevio.elev : CallType;
 
 
-struct CallButton {
-    int floor;
-    Call call;
+struct Call {
+    int         floor;
+    CallType    call;
 }
+
+struct CabCall {
+    int floor;
+    alias floor this;
+}
+
+struct HallCall {
+    int             floor;
+    HallCallType    call;
+}
+
+
 struct FloorSensor {
     int floor;
     alias floor this;
 }
+
 struct StopButton {
     bool stop;
     alias stop this;
 }
+
 struct Obstruction {
     bool obstruction;
     alias obstruction this;
@@ -36,7 +50,7 @@ struct Obstruction {
 
 
 void thr(){
-    bool[][]    call    = new bool[][](numFloors, Call.max+1);
+    bool[][]    call    = new bool[][](numFloors, CallType.max+1);
     int         floor   = -1;
     bool        stop    = 0;
     bool        obstr   = 0;
@@ -45,10 +59,15 @@ void thr(){
         Thread.sleep(feeds_elevioReader_pollrate.msecs);
 
        // Call button
-        for(auto c = Call.min; c <= Call.max; c++){
-            foreach(f; 0..numFloors){
+        foreach(f; 0..numFloors){
+            for(auto c = CallType.min; c <= CallType.max; c++){
                 if(call[f][c] != (call[f][c] = callButton(f, c))  &&  call[f][c]){
-                    publish(CallButton(f, c));
+                    final switch(c) with(CallType){
+                    case hallUp:    publish(HallCall(f, HallCallType.up));      break;
+                    case hallDown:  publish(HallCall(f, HallCallType.down));    break;
+                    case cab:       publish(CabCall(f));                        break;
+                    }
+                    publish(Call(f, c));
                 }
             }
         }

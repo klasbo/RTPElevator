@@ -11,14 +11,13 @@ import timer_event;
 
 import elevio.elev;
 import feeds.request_muxer;
-public import feeds.call_button_demuxer : HallCall;
 import feeds.elevio_reader;
 import fns.elevator_algorithm;
 import fns.elevator_state;
 
 struct CompletedHallRequest {
-    int         floor;
-    HallCall    call;
+    int             floor;
+    HallCallType    call;
 }
 struct CompletedCabRequest {
     int floor;
@@ -55,13 +54,13 @@ void thr(){
     }
     publish(e.local);
     
-    auto publishCompletedRequest = (Call c){
-        final switch(c) with(Call){
+    auto publishCompletedRequest = (CallType c){
+        final switch(c) with(CallType){
         case hallUp:
-            publish(CompletedHallRequest(e.floor, HallCall.up));
+            publish(CompletedHallRequest(e.floor, HallCallType.up));
             break;
         case hallDown:
-            publish(CompletedHallRequest(e.floor, HallCall.down));
+            publish(CompletedHallRequest(e.floor, HallCallType.down));
             break;
         case cab:
             publish(CompletedCabRequest(e.floor));

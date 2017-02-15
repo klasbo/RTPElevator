@@ -28,14 +28,14 @@ bool shouldStop(ElevatorState e){
     final switch(e.dirn) with(Dirn){
     case up:
         return
-            e.requests[e.floor][Call.hallUp]    ||
-            e.requests[e.floor][Call.cab]       ||
+            e.requests[e.floor][CallType.hallUp]    ||
+            e.requests[e.floor][CallType.cab]       ||
             !e.requestsAbove                    ||
             e.floor == e.requests.length-1;
     case down:
         return
-            e.requests[e.floor][Call.hallDown]  ||
-            e.requests[e.floor][Call.cab]       ||
+            e.requests[e.floor][CallType.hallDown]  ||
+            e.requests[e.floor][CallType.cab]       ||
             !e.requestsBelow                    ||
             e.floor == 0;
     case stop:
@@ -58,9 +58,9 @@ Dirn chooseDirection(ElevatorState e){
     }
 }
 
-ElevatorState clearReqsAtFloor(ElevatorState e, void delegate(Call c) onClearedRequest = null){
+ElevatorState clearReqsAtFloor(ElevatorState e, void delegate(CallType c) onClearedRequest = null){
     auto e2 = e;
-    for(Call c = Call.min; c < e2.requests[0].length; c++){
+    for(auto c = CallType.min; c < e2.requests[0].length; c++){
         if(e2.requests[e2.floor][c]){
             if(&onClearedRequest){
                 onClearedRequest(c);

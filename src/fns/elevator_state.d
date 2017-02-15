@@ -1,6 +1,6 @@
 module fns.elevator_state;
 
-public import elevio.elev : Call, Dirn;
+public import elevio.elev : CallType, Dirn;
 
 import std.algorithm;
 import std.array;

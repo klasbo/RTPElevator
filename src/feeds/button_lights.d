@@ -15,13 +15,13 @@ void thr(){
             (ActiveHallRequests a){
                 foreach(floor, reqsAtFloor; a){
                     foreach(call, req; reqsAtFloor){
-                        callButtonLight(floor, cast(Call)call, req);
+                        callButtonLight(floor, cast(CallType)call, req);
                     }
                 }
             },
             (LocalCabRequests a){
                 foreach(floor, req; a){
-                    callButtonLight(floor, Call.cab, req);
+                    callButtonLight(floor, CallType.cab, req);
                 }
             }
         );

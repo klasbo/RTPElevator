@@ -12,7 +12,6 @@ import feed;
 
 import elevio.elev;
 
-import feeds.call_button_demuxer;
 import feeds.elevio_reader;
 import feeds.request_consensus_cab;
 import feeds.request_consensus_hall;
@@ -51,7 +50,6 @@ void main(){
 
     spawn(&feedSupervisor!(
         feeds.button_lights.thr,
-        feeds.call_button_demuxer.thr,
         feeds.elevator_control.thr,
         feeds.elevio_reader.thr,
         feeds.floor_indicator.thr,

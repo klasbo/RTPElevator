@@ -1,12 +1,12 @@
 module elevio.elev_types;
 
-enum Call : int {
+enum CallType : int {
     hallUp,
     hallDown,
     cab
 }
 
-enum HallCall : int {
+enum HallCallType : int {
     up,
     down
 }

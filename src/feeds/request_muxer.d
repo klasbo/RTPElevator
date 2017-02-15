@@ -4,13 +4,9 @@ import std.concurrency;
 import std.stdio;
 
 import elev_config;
-public import elevio.elev_types : Call;
+public import elevio.elev_types : CallType;
 import feed;
-import feeds.elevio_reader;
 import feeds.request_consensus_cab;
-import feeds.request_consensus_hall;
-import feeds.elevator_control;
-import feeds.call_button_demuxer;
 import feeds.hall_request_assigner;
 
 struct LocallyAssignedRequests {
@@ -36,7 +32,7 @@ void thr(){
             },
             (LocalCabRequests a){
                 foreach(int floor, ref req; a){
-                    reqs[floor][Call.cab] = req;
+                    reqs[floor][CallType.cab] = req;
                 }
             }
         );

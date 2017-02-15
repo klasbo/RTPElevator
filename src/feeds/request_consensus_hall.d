@@ -13,12 +13,11 @@ import std.stdio;
 import elev_config;
 import feed;
 
-import feeds.call_button_demuxer;
+import feeds.elevio_reader;
 import feeds.peer_list;
 import feeds.elevator_control;
 
 import net.udp_bcast;
-public import elevio.elev_types : HallCall;
 
 import fns.request_consensus;
 
@@ -45,7 +44,7 @@ void thr(){
     Tid netTx = net.udp_bcast.init!(HReqMsg)(thisTid, netcfg);
 
     subscribe!PeerList;
-    subscribe!HallRequest;
+    subscribe!HallCall;
     subscribe!CompletedHallRequest;
 
 
@@ -95,7 +94,7 @@ void thr(){
                     }
                 }
             },
-            (HallRequest a){
+            (HallCall a){
                 requests[a.floor][a.call].activate(id);
                 debug(request_consensus_hall){
                     writeln("New request: ", a.floor, " ", a.call);

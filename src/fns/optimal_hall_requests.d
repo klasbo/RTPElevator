@@ -166,8 +166,8 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
             debug(optimal_hall_requests) writefln("  stopping");
             s.state.behaviour = doorOpen;
             s.time += feeds_elevatorControl_doorOpenDuration.msecs;
-            e.clearReqsAtFloor((Call c){
-                final switch(c) with(Call){
+            e.clearReqsAtFloor((CallType c){
+                final switch(c) with(CallType){
                 case hallUp, hallDown:
                     reqs[s.state.floor][c].assignedTo = s.id;
                     break;
@@ -260,7 +260,7 @@ unittest {
     ubyte id = 1;
 
     auto optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
-    assert(optimal[1][Call.hallUp]);
+    assert(optimal[1][CallType.hallUp]);
 }
 
 unittest {
@@ -288,8 +288,8 @@ unittest {
     ubyte id = 1;
 
     auto optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
-    assert(!optimal[2][Call.hallUp]);
-    assert(optimal[1][Call.hallDown]);
+    assert(!optimal[2][CallType.hallUp]);
+    assert(optimal[1][CallType.hallDown]);
 
     states = [
         1 : LocalElevatorState(ElevatorBehaviour.moving, 0, Dirn.up  ), // only change from prev scenario
@@ -297,8 +297,8 @@ unittest {
     ];
 
     optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
-    assert(!optimal[2][Call.hallUp]);
-    assert(optimal[1][Call.hallDown]);
+    assert(!optimal[2][CallType.hallUp]);
+    assert(optimal[1][CallType.hallDown]);
 }
 
 unittest {
@@ -326,7 +326,7 @@ unittest {
     ubyte id = 27;
 
     auto optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
-    assert(optimal[0][Call.hallUp]);
+    assert(optimal[0][CallType.hallUp]);
 }
 
 
