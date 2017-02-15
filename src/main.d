@@ -49,10 +49,9 @@ void feedSupervisor(F...)(){
 void main(){
 
     spawn(&feedSupervisor!(
-        feeds.button_lights.thr,
         feeds.elevator_control.thr,
+        feeds.elevio_lights.thr,
         feeds.elevio_reader.thr,
-        feeds.floor_indicator.thr,
         feeds.request_consensus_cab.thr,
         feeds.request_consensus_hall.thr,
         feeds.peer_list.thr,
