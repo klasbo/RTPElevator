@@ -72,12 +72,11 @@ void thr(){
         auto prevState = e;
         receive(
             (LocallyAssignedRequests a){
+                e.requests = a.dup;                
                 final switch(e.behaviour) with(ElevatorBehaviour){
                 case uninitialized:
-                    e.requests = a.dup;
                     break;
                 case idle:
-                    e.requests = a.dup;
                     if(e.anyRequests){
                         if(e.anyRequestsAtFloor){
                             doorLight(true);
@@ -92,7 +91,6 @@ void thr(){
                     }
                     break;
                 case moving:
-                    e.requests = a.dup;
                     break;
                 case doorOpen:
                     if(e.anyRequestsAtFloor){
@@ -105,6 +103,7 @@ void thr(){
                     break;
                 }
             },
+            
             (FloorSensor a){
                 e.floor = a;
                 final switch(e.behaviour) with(ElevatorBehaviour){
@@ -130,6 +129,7 @@ void thr(){
                     break;
                 }
             },
+            
             (DoorClose a){
                 final switch(e.behaviour) with(ElevatorBehaviour){
                 case uninitialized:
