@@ -27,6 +27,7 @@ struct CompletedCabRequest {
 
 
 private struct DoorClose {}
+private struct DoorCloseTimeout {}
 private struct MovementTimeout {}
 
 void thr(){
@@ -40,8 +41,10 @@ void thr(){
         behaviour : ElevatorBehaviour.uninitialized,
         requests :  new bool[3][](numFloors),
     };
-    auto doorTime = feeds_elevatorControl_doorOpenDuration.msecs;
-    auto moveTime = feeds_elevatorControl_travelTimeEstimate.msecs;
+    
+    auto doorTime       = feeds_elevatorControl_doorOpenDuration.msecs;
+    auto maxDoorTime    = 3 * feeds_elevatorControl_doorOpenDuration.msecs;
+    auto maxMoveTime    = 2 * feeds_elevatorControl_travelTimeEstimate.msecs;
     
     {
         auto floor = floorSensor();
@@ -86,7 +89,7 @@ void thr(){
                             e.dirn = e.chooseDirection;
                             motorDirection(e.dirn);
                             e.behaviour = moving;
-                            //thisTid.addEvent(2*moveTime, MovementTimeout());
+                            thisTid.addEvent(maxMoveTime, MovementTimeout());
                         }
                     }
                     break;
@@ -95,11 +98,13 @@ void thr(){
                 case doorOpen:
                     if(e.anyRequestsAtFloor){
                         thisTid.deleteEvent(typeid(DoorClose), Delete.all);
+                        if(e.error == ElevatorError.movementTimeout){
+                            e.error = ElevatorError.none;
+                            publish(e.error);
+                        }
                         thisTid.addEvent(doorTime, DoorClose());
                         e = e.clearReqsAtFloor(publishCompletedRequest);
                     }
-                    break;
-                case error:
                     break;
                 }
             },
@@ -110,22 +115,28 @@ void thr(){
                 case uninitialized:
                     goto case moving;
                 case idle:
+                    motorDirection(Dirn.stop);
                     break;
                 case moving:
-                    //thisTid.deleteEvent(typeid(MovementTimeout), Delete.all);
+                    thisTid.deleteEvent(typeid(MovementTimeout), Delete.all);
+                    if(e.error == ElevatorError.movementTimeout){
+                        e.error = ElevatorError.none;
+                        publish(e.error);
+                    }
+                    
                     if(e.shouldStop){
                         motorDirection(Dirn.stop);
                         doorLight(true);
                         e = e.clearReqsAtFloor(publishCompletedRequest);
                         thisTid.addEvent(doorTime, DoorClose());
+                        thisTid.addEvent(maxDoorTime, DoorCloseTimeout());
                         e.behaviour = doorOpen;                        
                     } else {                    
-                        //thisTid.addEvent(2*moveTime, MovementTimeout());
+                        thisTid.addEvent(maxMoveTime, MovementTimeout());
                     }
                     break;
                 case doorOpen:
-                    break;
-                case error:
+                    motorDirection(Dirn.stop);
                     break;
                 }
             },
@@ -139,6 +150,12 @@ void thr(){
                 case moving:
                     break;
                 case doorOpen:
+                    thisTid.deleteEvent(typeid(DoorCloseTimeout), Delete.all);
+                    if(e.error == ElevatorError.doorCloseTimeout){
+                        e.error = ElevatorError.none;
+                        publish(e.error);
+                    }
+                    
                     doorLight(false);
                     e.dirn = e.chooseDirection;
                     if(e.dirn == Dirn.stop){
@@ -146,12 +163,21 @@ void thr(){
                     } else {
                         motorDirection(e.dirn);
                         e.behaviour = moving;
+                        thisTid.addEvent(maxMoveTime, MovementTimeout());
                     }
                     break;
-                case error:
-                    break;
                 }
-            }
+            },
+            
+            (DoorCloseTimeout a){
+                e.error = ElevatorError.doorCloseTimeout;
+                publish(e.error);
+            },
+            
+            (MovementTimeout a){
+                e.error = ElevatorError.movementTimeout;
+                publish(e.error);
+            },
         );
         if(e != prevState){
             publish(e.local);

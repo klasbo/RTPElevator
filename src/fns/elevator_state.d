@@ -12,11 +12,17 @@ enum ElevatorBehaviour {
     idle,
     moving,
     doorOpen,
-    error,
+}
+
+enum ElevatorError {
+    none,
+    movementTimeout,
+    doorCloseTimeout,
 }
 
 struct LocalElevatorState {
     ElevatorBehaviour   behaviour;
+    ElevatorError       error;
     int                 floor;
     Dirn                dirn;
 }
@@ -24,6 +30,7 @@ struct LocalElevatorState {
 
 struct ElevatorState {
     ElevatorBehaviour   behaviour;
+    ElevatorError       error;
     int                 floor;
     Dirn                dirn;
     bool[3][]           requests;
@@ -35,6 +42,7 @@ struct ElevatorState {
 LocalElevatorState local(ElevatorState e){
     return LocalElevatorState(
         e.behaviour,
+        e.error,
         e.floor,
         e.dirn
     );
@@ -43,6 +51,7 @@ LocalElevatorState local(ElevatorState e){
 ElevatorState withRequests(LocalElevatorState e, bool[] cabReqs, bool[2][] hallReqs){
     return ElevatorState(
         e.behaviour,
+        e.error,
         e.floor,
         e.dirn,
         zip(hallReqs, cabReqs).map!(a => a[0] ~ a[1]).array.to!(bool[3][]),

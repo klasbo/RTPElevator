@@ -114,14 +114,12 @@ bool anyUnassigned(Req[2][] reqs){
 }
 
 State[] initialStates(LocalElevatorState[ubyte] states, bool[][ubyte] cabReqs, ubyte[] peerList){
-    auto ineligibleBehaviours = [
-        ElevatorBehaviour.uninitialized,
-        ElevatorBehaviour.error,
-    ];
     return states.keys.zip(states.values)
         .filter!(a => 
-            (peerList.canFind(a[0]) || a[0] == .id) && 
-            !ineligibleBehaviours.canFind(a[1].behaviour))
+            (peerList.canFind(a[0]) || a[0] == .id)             && 
+            a[1].behaviour != ElevatorBehaviour.uninitialized   &&
+            a[1].error == ElevatorError.none
+        )
         .map!(a => 
             State(a[0], a[1], cabReqs[a[0]], a[0].usecs)
         )
@@ -151,7 +149,7 @@ void performInitialMove(ref State s, ref Req[2][] reqs){
         s.state.floor += s.state.dirn;
         s.time += feeds_elevatorControl_travelTimeEstimate.msecs/2;
         break;
-    case uninitialized, error:
+    case uninitialized:
         assert(0);
     }
 }
@@ -193,7 +191,7 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
             s.time += feeds_elevatorControl_travelTimeEstimate.msecs;
         }
         break;
-    case uninitialized, error:
+    case uninitialized:
         assert(0);
     }
 }
@@ -237,9 +235,9 @@ void assignImmediate(ref Req[2][] reqs, ref State[] states){
 
 unittest {
     LocalElevatorState[ubyte] states = [
-        1 : LocalElevatorState(ElevatorBehaviour.idle,       0, Dirn.stop),
-        2 : LocalElevatorState(ElevatorBehaviour.doorOpen,   3, Dirn.down),
-        3 : LocalElevatorState(ElevatorBehaviour.moving,     2, Dirn.up  ),
+        1 : LocalElevatorState(ElevatorBehaviour.idle,      ElevatorError.none, 0, Dirn.stop),
+        2 : LocalElevatorState(ElevatorBehaviour.doorOpen,  ElevatorError.none, 3, Dirn.down),
+        3 : LocalElevatorState(ElevatorBehaviour.moving,    ElevatorError.none, 2, Dirn.up  ),
     ];
 
     bool[2][] hallreqs = [
@@ -267,8 +265,8 @@ unittest {
     // Two elevators moving from each "end" toward the middle floors
     // Elevators should stop at the closest order, even if it is in the "wrong" direction
     LocalElevatorState[ubyte] states = [
-        1 : LocalElevatorState(ElevatorBehaviour.idle, 0, Dirn.stop),
-        2 : LocalElevatorState(ElevatorBehaviour.idle, 3, Dirn.stop),
+        1 : LocalElevatorState(ElevatorBehaviour.idle, ElevatorError.none, 0, Dirn.stop),
+        2 : LocalElevatorState(ElevatorBehaviour.idle, ElevatorError.none, 3, Dirn.stop),
     ];
 
     bool[2][] hallreqs = [
@@ -292,8 +290,8 @@ unittest {
     assert(optimal[1][CallType.hallDown]);
 
     states = [
-        1 : LocalElevatorState(ElevatorBehaviour.moving, 0, Dirn.up  ), // only change from prev scenario
-        2 : LocalElevatorState(ElevatorBehaviour.idle,   3, Dirn.stop),
+        1 : LocalElevatorState(ElevatorBehaviour.moving, ElevatorError.none, 0, Dirn.up  ), // only change from prev scenario
+        2 : LocalElevatorState(ElevatorBehaviour.idle,   ElevatorError.none, 3, Dirn.stop),
     ];
 
     optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
@@ -305,8 +303,8 @@ unittest {
     // Two elevators are the same number of floors away from an order, but one is moving toward it
     // Should give the order to the moving elevator
     LocalElevatorState[ubyte] states = [
-        27 : LocalElevatorState(ElevatorBehaviour.moving,   1,  Dirn.down),
-        20 : LocalElevatorState(ElevatorBehaviour.doorOpen, 1,  Dirn.down),
+        27 : LocalElevatorState(ElevatorBehaviour.moving,   ElevatorError.none, 1,  Dirn.down),
+        20 : LocalElevatorState(ElevatorBehaviour.doorOpen, ElevatorError.none, 1,  Dirn.down),
     ];
 
     bool[2][] hallreqs = [

@@ -19,6 +19,7 @@ import feeds.peer_list;
 import feeds.elevator_states;
 import feeds.request_muxer;
 
+import fns.elevator_state;
 
 
 
@@ -71,6 +72,7 @@ void main(){
     subscribe!ActiveHallRequests;
     subscribe!ElevatorStates;
     subscribe!LocallyAssignedRequests;
+    subscribe!ElevatorError;
     
     while(true){
         receive(
@@ -92,6 +94,10 @@ void main(){
             },
             (ElevatorStates a){
                 writefln("[Log]: %s\n%(  %3d : %s\n%)", 
+                    typeid(a), a);
+            },
+            (ElevatorError a){
+                writefln("[Log]: %s\n    %s", 
                     typeid(a), a);
             },
             (Variant a){
