@@ -64,6 +64,7 @@ string conLoad(Cvars...)(string filename){
             import std.getopt;
             import std.stdio;
             import std.string : split;
+            import core.stdc.stdlib : exit;
             try {
                 string[] cfgContents;            
                 cfgContents = readText(\"" ~ filename ~ "\").split;
@@ -71,12 +72,13 @@ string conLoad(Cvars...)(string filename){
                     std.getopt.config.passThrough,";
     foreach(i, N; Ns){
         str ~= "
-                    \"" ~ N ~ "\", &" ~ N ~ ",";
+                    std.getopt.config.required, \"" ~ N ~ "\", &" ~ N ~ ",";
     }
     str ~= "
                 );            
             } catch(Exception e){
                 writeln(\"Unable to load " ~ filename ~ ":\\n\", e.msg);
+                exit(-1);
             }
         }";        
     return str;
