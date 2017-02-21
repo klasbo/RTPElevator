@@ -4,6 +4,7 @@ import std.array;
 import std.algorithm;
 import std.concurrency;
 import std.conv;
+import std.datetime;
 import std.meta;
 import std.socket;
 import std.stdio;
@@ -28,8 +29,8 @@ struct Config {
 }
 
 Tid init(T...)(Tid receiver = thisTid, Config cfg = Config.init) if(allSatisfy!(isSerialisable, T)){
-    spawn(&rx!T, receiver, cfg);
-    return spawn(&tx!T, cfg);
+    spawnLinked(&rx!T, receiver, cfg);
+    return spawnLinked(&tx!T, cfg);
 }
 
 
@@ -49,7 +50,8 @@ private void rx(T...)(Tid receiver, Config cfg){
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
     sock.bind(addr);
     
-    while(true){
+    bool quit = false;
+    while(!quit){
         
         auto n = sock.receiveFrom(buf, remote);
         if(n > 0){
@@ -69,6 +71,11 @@ private void rx(T...)(Tid receiver, Config cfg){
             }
         }
         buf[0..n] = 0;
+        
+        receiveTimeout(0.msecs,
+            (LinkTerminated lt){    quit = true;    },
+            (OwnerTerminated ot){   quit = true;    },
+        );        
     }
     
     } catch(Throwable t){ t.writeln; throw t; }
@@ -85,9 +92,11 @@ private void tx(T...)(Config cfg){
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.BROADCAST, 1);
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
-        
-    while(true){
+    bool quit = false;
+    while(!quit){
         receive(
+            (LinkTerminated lt){    quit = true;    },
+            (OwnerTerminated ot){   quit = true;    },
             (Variant v){
                 foreach(t; T){
                     if(v.type == typeid(t)){

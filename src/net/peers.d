@@ -32,23 +32,8 @@ struct Config {
 
 
 Tid init(Tid receiver = thisTid, Config cfg = Config.init){
-/+
-    try {
-        if(cfg.id == 255){ 
-            cfg.id = new TcpSocket(new InternetAddress("google.com", 80))
-                .localAddress
-                .toAddrString
-                .splitter('.')
-                .array[$-1]
-                .to!ubyte;
-        }
-    } catch(Exception e){
-        writeln("Unable to set default id:\n", e.msg);
-    }
-+/
-    
-    spawn(&rx, receiver, cfg);
-    return spawn(&tx, cfg);
+    spawnLinked(&rx, receiver, cfg);
+    return spawnLinked(&tx, cfg);
 }
 
 
@@ -65,8 +50,11 @@ private void tx(Config cfg){
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
 
     bool txEnable = true;
-    while(true){
-        receiveTimeout(cfg.interval.msecs, 
+    bool quit = false;
+    while(!quit){
+        receiveTimeout(cfg.interval.msecs,
+            (LinkTerminated lt){    quit = true;    },
+            (OwnerTerminated ot){   quit = true;    },
             (TxEnable t){
                 txEnable = t;
             }
@@ -95,7 +83,8 @@ private void rx(Tid receiver, Config cfg){
     sock.setOption(SocketOptionLevel.SOCKET, SocketOption.RCVTIMEO, cfg.timeout.msecs);
     sock.bind(addr);
 
-    while(true){
+    bool quit = false;
+    while(!quit){    
         listHasChanges  = false;
         buf[]           = 0;
 
@@ -118,6 +107,12 @@ private void rx(Tid receiver, Config cfg){
         if(listHasChanges){
             ownerTid.send(PeerList(lastSeen.keys.idup));
         }
+        
+        
+        receiveTimeout(0.msecs,
+            (LinkTerminated lt){    quit = true;    },
+            (OwnerTerminated ot){   quit = true;    },
+        );
     }
     } catch(Throwable t){ t.writeln; throw t; }
 }
