@@ -30,14 +30,16 @@ bool shouldStop(ElevatorState e){
         return
             e.requests[e.floor][CallType.hallUp]    ||
             e.requests[e.floor][CallType.cab]       ||
-            !e.requestsAbove                    ||
+            !e.requestsAbove                        ||
+            e.floor == 0                            || 
             e.floor == e.requests.length-1;
     case down:
         return
             e.requests[e.floor][CallType.hallDown]  ||
             e.requests[e.floor][CallType.cab]       ||
-            !e.requestsBelow                    ||
-            e.floor == 0;
+            !e.requestsBelow                        ||
+            e.floor == 0                            || 
+            e.floor == e.requests.length-1;
     case stop:
         return true;
     }
