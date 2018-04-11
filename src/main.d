@@ -47,7 +47,13 @@ void feedSupervisor(F...)(){
     }
 }
 
-void main(){
+
+
+void main(string[] args){
+
+    cfg = loadConfig(args, "elevator.con");
+    
+    elevio_init();
 
     spawn(&feedSupervisor!(
         feeds.elevator_control.thr,
@@ -78,19 +84,19 @@ void main(){
         receive(
             (LocalCabRequests a){
                 writefln("[Log]: %s\n     %(%s %)\n    [%(%d %)]",
-                    typeid(a), iota(numFloors), a);
+                    typeid(a), iota(cfg.numFloors), a);
             },
             (ActiveCabRequests a){
                 writefln("[Log]: %s\n         %(%s %)\n%(  %3d : [%(%d %)]%|\n%)",
-                    typeid(a), iota(numFloors), a);
+                    typeid(a), iota(cfg.numFloors), a);
             },
             (ActiveHallRequests a){
                 writefln("[Log]: %s\n     %(%s %)\n   [%([%(%d %)]%|\n    %)]", 
-                    typeid(a), iota(numFloors), a.map!(r => r.array).array.transposed);
+                    typeid(a), iota(cfg.numFloors), a.map!(r => r.array).array.transposed);
             },
             (LocallyAssignedRequests a){
                 writefln("[Log]: %s\n     %(%s %)\n   [%([%(%d %)]%|\n    %)]", 
-                    typeid(a), iota(numFloors), a.map!(r => r.array).array.transposed);
+                    typeid(a), iota(cfg.numFloors), a.map!(r => r.array).array.transposed);
             },
             (ElevatorStates a){
                 writefln("[Log]: %s\n%(  %3d : %s\n%)", 

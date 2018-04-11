@@ -27,10 +27,10 @@ private struct EStateMsg {
 void thr(){
     try {
     net.udp_bcast.Config netcfg = {
-        id :            id,
-        port :          feeds_elevatorStates_port,
+        id :            cfg.id,
+        port :          cfg.feeds_elevatorStates_port,
         recvFromSelf :  0,
-        bufSize :       feeds_elevatorStates_bufSize,
+        bufSize :       cfg.feeds_elevatorStates_bufSize,
     };
     Tid netTx = net.udp_bcast.init!(EStateMsg)(thisTid, netcfg);
     
@@ -39,10 +39,10 @@ void thr(){
     LocalElevatorState[ubyte] states;
     
     while(true){
-        bool timeout = !receiveTimeout(feeds_elevatorStates_minPeriod.msecs,
+        bool timeout = !receiveTimeout(cfg.feeds_elevatorStates_minPeriod.msecs,
             (LocalElevatorState a){
-                states[id] = a;
-                netTx.send(EStateMsg(id, states[id]));
+                states[cfg.id] = a;
+                netTx.send(EStateMsg(cfg.id, states[cfg.id]));
                 publish(ElevatorStates(cast(shared)states.dup));
             },
             (EStateMsg a){
@@ -52,8 +52,8 @@ void thr(){
                 }
             }
         );
-        if(timeout && id in states){
-            netTx.send(EStateMsg(id, states[id]));
+        if(timeout && cfg.id in states){
+            netTx.send(EStateMsg(cfg.id, states[cfg.id]));
         }
     }
     } catch(Throwable t){ t.writeln; throw(t); }

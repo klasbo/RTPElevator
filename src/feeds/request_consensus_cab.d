@@ -42,10 +42,10 @@ struct LocalCabRequests {
 void thr(){
     try {
     net.udp_bcast.Config netcfg = {
-        id :            id,
-        port :          feeds_requestConsensusCab_port,
+        id :            cfg.id,
+        port :          cfg.feeds_requestConsensusCab_port,
         recvFromSelf :  1,
-        bufSize :       feeds_requestConsensus_bufSize,
+        bufSize :       cfg.feeds_requestConsensus_bufSize,
     };
     Tid netTx = net.udp_bcast.init!(CReqMsg)(thisTid, netcfg);
 
@@ -55,14 +55,14 @@ void thr(){
     subscribe!CompletedCabRequest;
 
 
-    Req[][ubyte]    requests = [id : new Req[](numFloors)];
+    Req[][ubyte]    requests = [cfg.id : new Req[](cfg.numFloors)];
     ubyte[]         peers;
 
     publish(ActiveCabRequests(cast(shared)requests.activeCabRequests));
     publish(LocalCabRequests(requests.localActiveCabRequests.idup));
     
     while(true){
-        Duration period = uniform(feeds_requestConsensus_minPeriod, feeds_requestConsensus_maxPeriod).msecs;
+        Duration period = uniform(cfg.feeds_requestConsensus_minPeriod, cfg.feeds_requestConsensus_maxPeriod).msecs;
         bool timeout = !receiveTimeout(period,
             (CReqMsg a){
                 Req[][ubyte] recvdRequests = a.requests;
@@ -87,7 +87,7 @@ void thr(){
                         merge(
                             requests[remoteID][floor],
                             remote,
-                            id,
+                            cfg.id,
                             a.owner,
                             peers,
                             (){
@@ -111,7 +111,7 @@ void thr(){
                 }
             },
             (CabCall a){
-                requests[id][a].activate(id);
+                requests[cfg.id][a].activate(cfg.id);
                 debug(request_consensus_cab){
                     writeln("New request: ", a);
                     requests.print;
@@ -119,7 +119,7 @@ void thr(){
                 }
             },
             (CompletedCabRequest a){
-                requests[id][a].deactivate(id, peers);
+                requests[cfg.id][a].deactivate(cfg.id, peers);
                 debug(request_consensus_cab){
                     writeln("Cleared request: ", a);
                     requests.print;
@@ -144,7 +144,7 @@ void thr(){
             }
         );
         if(timeout){
-            netTx.send(CReqMsg(id, requests));
+            netTx.send(CReqMsg(cfg.id, requests));
         }
     }
     } catch(Throwable t){ t.writeln; throw(t); }
@@ -196,7 +196,7 @@ void print(Req[][ubyte] reqs){
 
 
 bool[] localActiveCabRequests(Req[][ubyte] reqs){
-    return reqs[id].map!(a => (a.state == ReqState.active)).array;
+    return reqs[cfg.id].map!(a => (a.state == ReqState.active)).array;
 }
 
 bool[][ubyte] activeCabRequests(Req[][ubyte] reqs){

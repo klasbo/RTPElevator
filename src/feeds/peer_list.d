@@ -25,10 +25,10 @@ struct LostPeers {
 void thr(){
     try {
     net.peers.Config cfg = {
-        port :      feeds_peerList_port,
-        timeout :   feeds_peerList_timeout,
-        interval :  feeds_peerList_interval,
-        id :        id,
+        port :      cfg.feeds_peerList_port,
+        timeout :   cfg.feeds_peerList_timeout,
+        interval :  cfg.feeds_peerList_interval,
+        id :        cfg.id,
     };
     Tid peersTx = net.peers.init(thisTid, cfg);
     

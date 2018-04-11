@@ -25,8 +25,8 @@ void thr(){
     subscribe!ElevatorStates;
     subscribe!PeerList;
     
-    bool[2][]                   hallReqs        = new bool[2][](numFloors);
-    bool[][ubyte]               cabReqs         = [id : new bool[](numFloors)];
+    bool[2][]                   hallReqs        = new bool[2][](cfg.numFloors);
+    bool[][ubyte]               cabReqs         = [cfg.id : new bool[](cfg.numFloors)];
     LocalElevatorState[ubyte]   elevatorStates;
     ubyte[]                     peerList;
     
@@ -48,7 +48,7 @@ void thr(){
         
         publish(
             LocallyAssignedHallRequests(
-                optimalHallRequests(id, hallReqs, cabReqs, elevatorStates, peerList).idup
+                optimalHallRequests(cfg.id, hallReqs, cabReqs, elevatorStates, peerList).idup
             )
         );
     }    

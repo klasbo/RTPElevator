@@ -116,7 +116,7 @@ bool anyUnassigned(Req[2][] reqs){
 State[] initialStates(LocalElevatorState[ubyte] states, bool[][ubyte] cabReqs, ubyte[] peerList){
     return states.keys.zip(states.values)
         .filter!(a => 
-            (peerList.canFind(a[0]) || a[0] == .id)             && 
+            (peerList.canFind(a[0]) || a[0] == cfg.id)             && 
             a[1].behaviour != ElevatorBehaviour.uninitialized   &&
             a[1].error == ElevatorError.none
         )
@@ -133,21 +133,21 @@ void performInitialMove(ref State s, ref Req[2][] reqs){
     final switch(s.state.behaviour) with(ElevatorBehaviour){    
     case doorOpen:
         debug(optimal_hall_requests) writefln("  closing door");
-        s.time += feeds_elevatorControl_doorOpenDuration.msecs/2;
+        s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs/2;
         goto case idle;
     case idle:
         foreach(c; 0..2){
             if(reqs[s.state.floor][c].active){
                 debug(optimal_hall_requests) writefln("  taking req %s at current floor", c);
                 reqs[s.state.floor][c].assignedTo = s.id;
-                s.time += feeds_elevatorControl_doorOpenDuration.msecs;
+                s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs;
             }
         }
         break;
     case moving:
         debug(optimal_hall_requests) writefln("  arriving");
         s.state.floor += s.state.dirn;
-        s.time += feeds_elevatorControl_travelTimeEstimate.msecs/2;
+        s.time += cfg.feeds_elevatorControl_travelTimeEstimate.msecs/2;
         break;
     case uninitialized:
         assert(0);
@@ -163,7 +163,7 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
         if(e.shouldStop){
             debug(optimal_hall_requests) writefln("  stopping");
             s.state.behaviour = doorOpen;
-            s.time += feeds_elevatorControl_doorOpenDuration.msecs;
+            s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs;
             e.clearReqsAtFloor((CallType c){
                 final switch(c) with(CallType){
                 case hallUp, hallDown:
@@ -176,7 +176,7 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
         } else {
             debug(optimal_hall_requests) writefln("  continuing");
             s.state.floor += s.state.dirn;
-            s.time += feeds_elevatorControl_travelTimeEstimate.msecs;
+            s.time += cfg.feeds_elevatorControl_travelTimeEstimate.msecs;
         }
         break;
     case idle, doorOpen:
@@ -188,7 +188,7 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
             s.state.behaviour = moving;
             debug(optimal_hall_requests) writefln("  departing");
             s.state.floor += s.state.dirn;
-            s.time += feeds_elevatorControl_travelTimeEstimate.msecs;
+            s.time += cfg.feeds_elevatorControl_travelTimeEstimate.msecs;
         }
         break;
     case uninitialized:
@@ -198,6 +198,9 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
 
 // all unvisited hall requests are at floors with elevators with no cab requests
 bool unvisitedAreImmediatelyAssignable(Req[2][] reqs, State[] states){
+    if(states.map!(a => a.cabReqs.any).any){
+        return false;
+    }
     foreach(f, reqsAtFloor; reqs){
         foreach(c, req; reqsAtFloor){
             if(req.active && req.assignedTo == ubyte.init){
@@ -217,7 +220,7 @@ void assignImmediate(ref Req[2][] reqs, ref State[] states){
                 foreach(ref s; states){
                     if(s.state.floor == f && !s.cabReqs.any){
                         req.assignedTo = s.id;
-                        s.time += feeds_elevatorControl_doorOpenDuration.msecs;
+                        s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs;
                     }
                 }
             }

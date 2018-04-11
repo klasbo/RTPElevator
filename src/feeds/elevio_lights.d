@@ -15,14 +15,14 @@ void thr(){
     while(true){
         receive(
             (ActiveHallRequests a){
-                foreach(floor, reqsAtFloor; a){
+                foreach(int floor, reqsAtFloor; a){
                     foreach(call, req; reqsAtFloor){
                         callButtonLight(floor, cast(CallType)call, req);
                     }
                 }
             },
             (LocalCabRequests a){
-                foreach(floor, req; a){
+                foreach(int floor, req; a){
                     callButtonLight(floor, CallType.cab, req);
                 }
             },

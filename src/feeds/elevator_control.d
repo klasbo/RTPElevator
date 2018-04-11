@@ -39,12 +39,12 @@ void thr(){
         floor :     -1,
         dirn :      Dirn.stop,
         behaviour : ElevatorBehaviour.uninitialized,
-        requests :  new bool[3][](numFloors),
+        requests :  new bool[3][](cfg.numFloors),
     };
     
-    auto doorTime       = feeds_elevatorControl_doorOpenDuration.msecs;
-    auto maxDoorTime    = 3 * feeds_elevatorControl_doorOpenDuration.msecs;
-    auto maxMoveTime    = 2 * feeds_elevatorControl_travelTimeEstimate.msecs;
+    auto doorTime       = cfg.feeds_elevatorControl_doorOpenDuration.msecs;
+    auto maxDoorTime    = 3 * cfg.feeds_elevatorControl_doorOpenDuration.msecs;
+    auto maxMoveTime    = 2 * cfg.feeds_elevatorControl_travelTimeEstimate.msecs;
     
     {
         auto floor = floorSensor();

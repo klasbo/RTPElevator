@@ -1,15 +1,17 @@
 elevator.con
 
-
---elevio_elevtype                           simulation
-
 --id                                        1
+--numFloors                                 4
+
+--elevio_elev_elevtype                      simulation
+--elevio_elev_ip                            localhost
+--elevio_elev_port                          15657
 
 --feeds_elevioReader_pollrate               25
 
 --feeds_peerList_port                       16567
---feeds_peerList_timeout                    350
---feeds_peerList_interval                   100
+--feeds_peerList_timeout                    550
+--feeds_peerList_interval                   50
 
 --feeds_elevatorStates_port                 16568
 --feeds_elevatorStates_bufSize              1024
@@ -23,4 +25,5 @@ elevator.con
 
 --feeds_elevatorControl_doorOpenDuration    3000
 --feeds_elevatorControl_travelTimeEstimate  2500
+--feeds_elevatorControl_clearRequestType    inDirn
 

@@ -36,10 +36,10 @@ struct ActiveHallRequests {
 void thr(){
     try {
     net.udp_bcast.Config netcfg = {
-        id :            id,
-        port :          feeds_requestConsensusHall_port,
+        id :            cfg.id,
+        port :          cfg.feeds_requestConsensusHall_port,
         recvFromSelf :  1,
-        bufSize :       feeds_requestConsensus_bufSize,
+        bufSize :       cfg.feeds_requestConsensus_bufSize,
     };
     Tid netTx = net.udp_bcast.init!(HReqMsg)(thisTid, netcfg);
 
@@ -48,11 +48,11 @@ void thr(){
     subscribe!CompletedHallRequest;
 
 
-    Req[2][]    requests = new Req[2][](numFloors);
+    Req[2][]    requests = new Req[2][](cfg.numFloors);
     ubyte[]     peers;
 
     while(true){
-        Duration period = uniform(feeds_requestConsensus_minPeriod, feeds_requestConsensus_maxPeriod).msecs;
+        Duration period = uniform(cfg.feeds_requestConsensus_minPeriod, cfg.feeds_requestConsensus_maxPeriod).msecs;
         bool timeout = !receiveTimeout(period,
             (HReqMsg a){
                 Req[2][] recvdRequests = a.requests;
@@ -73,7 +73,7 @@ void thr(){
                         merge(
                             local,
                             recvdRequests[floor][call],
-                            id,
+                            cfg.id,
                             a.owner,
                             peers,
                             (){
@@ -95,7 +95,7 @@ void thr(){
                 }
             },
             (HallCall a){
-                requests[a.floor][a.call].activate(id);
+                requests[a.floor][a.call].activate(cfg.id);
                 debug(request_consensus_hall){
                     writeln("New request: ", a.floor, " ", a.call);
                     requests.print;
@@ -103,7 +103,7 @@ void thr(){
                 }
             },
             (CompletedHallRequest a){
-                requests[a.floor][a.call].deactivate(id, peers);
+                requests[a.floor][a.call].deactivate(cfg.id, peers);
                 debug(request_consensus_hall){
                     writeln("Cleared request: ", a.floor, " ", a.call);
                     requests.print;
@@ -115,7 +115,7 @@ void thr(){
                 peers = a.dup.sort().array;
                 
                 // if lost all: set inactive to unknown
-                if(peers == [id] || peers.empty){
+                if(peers == [cfg.id] || peers.empty){
                     foreach(int floor, ref requestsAtFloor; requests){
                         foreach(call, ref req; requestsAtFloor){
                             if(req.state == ReqState.inactive){
@@ -127,7 +127,7 @@ void thr(){
             }
         );
         if(timeout){        
-            netTx.send(HReqMsg(id, requests));
+            netTx.send(HReqMsg(cfg.id, requests));
         }
     }
     } catch(Throwable t){ t.writeln; throw(t); }

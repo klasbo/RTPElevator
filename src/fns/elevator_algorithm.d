@@ -5,7 +5,7 @@ import std.range;
 import std.stdio;
 
 import fns.elevator_state;
-
+import elev_config;
 
 private bool requestsAbove(ElevatorState e){
     return e.requests[e.floor+1..$].map!(a => a.array.any).any;
@@ -61,8 +61,10 @@ Dirn chooseDirection(ElevatorState e){
 }
 
 ElevatorState clearReqsAtFloor(ElevatorState e, void delegate(CallType c) onClearedRequest = null){
-    auto e2 = e;
-    for(auto c = CallType.min; c < e2.requests[0].length; c++){
+
+    auto e2 = e;    
+    
+    void clear(CallType c){
         if(e2.requests[e2.floor][c]){
             if(&onClearedRequest){
                 onClearedRequest(c);
@@ -70,5 +72,38 @@ ElevatorState clearReqsAtFloor(ElevatorState e, void delegate(CallType c) onClea
             e2.requests[e2.floor][c] = false;
         }
     }
+
+    
+    final switch(cfg.feeds_elevatorControl_clearRequestType) with(ClearRequestType){
+    case all:    
+        for(auto c = CallType.min; c < e2.requests[0].length; c++){
+            clear(c);
+        }
+        break;
+
+    case inDirn:
+        clear(CallType.cab);
+        
+        final switch(e.dirn) with(Dirn){
+        case up:
+            clear(CallType.hallUp);
+            if(!e2.requestsAbove){
+                clear(CallType.hallDown);
+            }
+            break;
+        case down:
+            clear(CallType.hallDown);
+            if(!e2.requestsBelow){
+                clear(CallType.hallUp);
+            }
+            break;
+        case stop:
+            clear(CallType.hallUp);
+            clear(CallType.hallDown);
+            break;
+        }
+        break;
+    }    
+    
     return e2;
 }

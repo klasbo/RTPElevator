@@ -47,18 +47,15 @@ version(linux){
 
 private __gshared TcpSocket sock;
 
-mixin("simulator.con".conLoad!(
-    string, "com_ip",
-    ushort, "com_port",
-));
 
-shared static this(){
-    final switch(elevio_elevtype) with(ElevatorType){
+
+void elevio_init(){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         try {
             sock = new TcpSocket();
             sock.setOption(SocketOptionLevel.SOCKET, SocketOption.REUSEADDR, 1);
-            sock.connect(new InternetAddress(com_ip, com_port));
+            sock.connect(new InternetAddress(cfg.elevio_elev_ip, cfg.elevio_elev_port));
         } catch(Exception e){
             writeln(__FUNCTION__, ": Unable to connect to simulator");
         }
@@ -70,7 +67,7 @@ shared static this(){
     
     // Reset lights
     for(auto c = CallType.min; c <= CallType.max; c++){
-        foreach(f; 0..numFloors){
+        foreach(f; 0..cfg.numFloors){
             callButtonLight(f, c, false);
         }
     }
@@ -106,7 +103,7 @@ shared static this(){
 
 
 void motorDirection(Dirn d){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [1, cast(ubyte)d, 0, 0];
         sock.send(buf);
@@ -118,7 +115,7 @@ void motorDirection(Dirn d){
 }
 
 void callButtonLight(int floor, CallType call, bool on){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [2, cast(ubyte)call, cast(ubyte)floor, cast(ubyte)on];
         sock.send(buf);
@@ -130,7 +127,7 @@ void callButtonLight(int floor, CallType call, bool on){
 }
 
 void floorIndicator(int floor){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [3, cast(ubyte)floor, 0, 0];
         sock.send(buf);
@@ -142,7 +139,7 @@ void floorIndicator(int floor){
 }
 
 void doorLight(bool on){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [4, cast(ubyte)on, 0, 0];
         sock.send(buf);
@@ -154,7 +151,7 @@ void doorLight(bool on){
 }
 
 void stopButtonLight(bool on){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [5, cast(ubyte)on, 0, 0];
         sock.send(buf);
@@ -169,7 +166,7 @@ void stopButtonLight(bool on){
 
 
 bool callButton(int floor, CallType call){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [6, cast(ubyte)call, cast(ubyte)floor, 0];
         sock.send(buf);
@@ -181,7 +178,7 @@ bool callButton(int floor, CallType call){
 }
 
 int floorSensor(){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [7, 0, 0, 0];
         sock.send(buf);
@@ -193,7 +190,7 @@ int floorSensor(){
 }
 
 bool stopButton(){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [8, 0, 0, 0];
         sock.send(buf);
@@ -205,7 +202,7 @@ bool stopButton(){
 }
 
 bool obstruction(){
-    final switch(elevio_elevtype) with(ElevatorType){
+    final switch(cfg.elevio_elev_elevtype) with(ElevatorType){
     case simulation:
         ubyte[4] buf = [9, 0, 0, 0];
         sock.send(buf);

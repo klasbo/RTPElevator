@@ -50,16 +50,16 @@ struct Obstruction {
 
 
 void thr(){
-    bool[][]    call    = new bool[][](numFloors, CallType.max+1);
+    bool[][]    call    = new bool[][](cfg.numFloors, CallType.max+1);
     int         floor   = -1;
     bool        stop    = 0;
     bool        obstr   = 0;
 
     while(true){
-        Thread.sleep(feeds_elevioReader_pollrate.msecs);
+        Thread.sleep(cfg.feeds_elevioReader_pollrate.msecs);
 
        // Call button
-        foreach(f; 0..numFloors){
+        foreach(f; 0..cfg.numFloors){
             for(auto c = CallType.min; c <= CallType.max; c++){
                 if(call[f][c] != (call[f][c] = callButton(f, c))  &&  call[f][c]){
                     final switch(c) with(CallType){

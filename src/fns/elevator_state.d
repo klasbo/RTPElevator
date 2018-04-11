@@ -63,3 +63,7 @@ bool[2][] hallRequests(ElevatorState e){
     // efficiency... :thinking:
 }
 
+enum ClearRequestType {
+    inDirn,
+    all
+}

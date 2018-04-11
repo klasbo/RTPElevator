@@ -19,7 +19,7 @@ void thr(){
     subscribe!LocallyAssignedHallRequests;
     subscribe!LocalCabRequests;
     
-    auto reqs = new bool[3][](numFloors);
+    auto reqs = new bool[3][](cfg.numFloors);
     
     while(true){
         receive(
