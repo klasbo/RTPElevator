@@ -1,70 +1,98 @@
-feeds
-    elevio_reader
-        out
-            CallButton
-            FloorSensor
-    floor_indicator
-        in
-            FloorSensor
-    request_button_lights
-        in
-            ActiveHallRequests
-            ActiveCabRequests
-    request_muxer
-        in
-            LocallyAssignedHallRequests
-            ActiveCabRequests
-        out
-            LocallyAssignedRequests
-    call_button_demuxer
-        in
-            CallButton
-        out
-            HallCall
-            CabCall
-    request_consensus_hall
-        net
-        in
-            HallCall
-            CompletedHallRequest
-            PeerList
-        out
-            ActiveHallRequests
-    request_consensus_cab
-        net
-        in
-            CabCall
-            CompletedCabRequest
-            PeerList
-        out
-            ActiveCabRequests
-    elevator_control
-        in
-            LocallyAssignedRequests
-            FloorSensor
-        out
-            CompletedHallRequest
-            CompletedCabRequest
-            LocalElevatorState  // immutable copy
-    hall_request_assigner
-        in
-            ActiveHallRequests
-            ElevatorStates
-            PeerList
-        out
-            LocallyAssignedHallRequests
-    elevator_states
-        net
-        in
-            LocalElevatorState
-        out
-            ElevatorStates
-    peer_list
-        net
-        out
-            PeerList
-            NewPeers
-            LostPeers
-    hall_button_lights
-        in
-            ActiveHallRequests
+
+HW INPUT
+--------
+
+elevio_reader
+    out
+        CallButton
+        FloorSensor
+        StopButton
+        Obstruction
+
+        
+HW OUTPUT
+---------
+
+floor_indicator
+    in
+        FloorSensor
+button_lights
+    in
+        LocalCabRequests
+        ActiveHallRequests
+
+
+REQ CONSENSUS
+-------------        
+
+request_consensus_hall
+    net
+    in
+        HallCall
+        CompletedHallRequest
+        PeerList
+    out
+        ActiveHallRequests
+request_consensus_cab
+    net
+    in
+        CabCall
+        CompletedCabRequest
+        PeerList
+        LostPeers
+    out
+        ActiveCabRequests
+        LocalCabRequests
+
+        
+ELEV STATES
+-----------
+
+elevator_states
+    net
+    in
+        LocalElevatorState
+    out
+        ElevatorStates
+        
+        
+REQ ASSIGN
+----------
+
+hall_request_assigner
+    in
+        ActiveCabRequests
+        ActiveHallRequests
+        ElevatorStates
+        PeerList
+    out
+        LocallyAssignedHallRequests
+        
+ELEV CTRL
+---------
+
+elevator_control
+    in
+        LocallyAssignedRequests
+        FloorSensor
+    out
+        CompletedHallRequest
+        CompletedCabRequest
+        LocalElevatorState
+        
+request_muxer
+    in
+        LocallyAssignedHallRequests
+        LocalCabRequests
+    out
+        LocallyAssignedRequests
+        
+            
+peer_list
+    net
+    out
+        PeerList
+        NewPeers
+        LostPeers
+        
+        
