@@ -44,6 +44,8 @@ bool[2][] optimalHallRequests(
     }
     
     while(true){
+        states.sort!("a.time < b.time")();    
+    
         debug(optimal_hall_requests) writeln;
         debug(optimal_hall_requests) writefln("states:\n  %(%s,\n  %)", states);
         debug(optimal_hall_requests) writefln("reqs:\n%(  %(%s, %)\n%)", reqs);
@@ -62,8 +64,6 @@ bool[2][] optimalHallRequests(
             break;
         }
     
-    
-        states.sort!("a.time < b.time")();
         performSingleMove(states[0], reqs);
     }
     
@@ -156,23 +156,28 @@ void performInitialMove(ref State s, ref Req[2][] reqs){
 
 void performSingleMove(ref State s, ref Req[2][] reqs){
     debug(optimal_hall_requests) writefln("single move: %s", s);
-    auto e = s.withReqs!(a => a.active && (a.assignedTo == ubyte.init || a.assignedTo == s.id))(reqs);
+    
+    auto e = s.withReqs!(a => a.active  &&  a.assignedTo == ubyte.init)(reqs);
+    
     debug(optimal_hall_requests) writefln("%s", e);
+    
+    auto onClearRequest = (CallType c){
+        final switch(c) with(CallType){
+        case hallUp, hallDown:
+            reqs[s.state.floor][c].assignedTo = s.id;
+            break;
+        case cab:
+            s.cabReqs[s.state.floor] = false;
+        }
+    };
+    
     final switch(s.state.behaviour) with(ElevatorBehaviour){
     case moving:
         if(e.shouldStop){
             debug(optimal_hall_requests) writefln("  stopping");
             s.state.behaviour = doorOpen;
             s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs;
-            e.clearReqsAtFloor((CallType c){
-                final switch(c) with(CallType){
-                case hallUp, hallDown:
-                    reqs[s.state.floor][c].assignedTo = s.id;
-                    break;
-                case cab:
-                    s.cabReqs[s.state.floor] = false;
-                }
-            });
+            e.clearReqsAtFloor(onClearRequest);
         } else {
             debug(optimal_hall_requests) writefln("  continuing");
             s.state.floor += s.state.dirn;
@@ -182,8 +187,13 @@ void performSingleMove(ref State s, ref Req[2][] reqs){
     case idle, doorOpen:
         s.state.dirn = e.chooseDirection;
         if(s.state.dirn == Dirn.stop){
-            s.state.behaviour = idle;
-            debug(optimal_hall_requests) writefln("  idling");
+            if(e.anyRequestsAtFloor){
+                e.clearReqsAtFloor(onClearRequest);
+                debug(optimal_hall_requests) writefln("  taking req in opposite dirn");
+            } else {
+                s.state.behaviour = idle;
+                debug(optimal_hall_requests) writefln("  idling");
+            }
         } else {
             s.state.behaviour = moving;
             debug(optimal_hall_requests) writefln("  departing");
@@ -216,8 +226,8 @@ bool unvisitedAreImmediatelyAssignable(Req[2][] reqs, State[] states){
 void assignImmediate(ref Req[2][] reqs, ref State[] states){
     foreach(f, ref reqsAtFloor; reqs){
         foreach(c, ref req; reqsAtFloor){
-            if(req.active && req.assignedTo == ubyte.init){
-                foreach(ref s; states){
+            foreach(ref s; states){
+                if(req.active && req.assignedTo == ubyte.init){
                     if(s.state.floor == f && !s.cabReqs.any){
                         req.assignedTo = s.id;
                         s.time += cfg.feeds_elevatorControl_doorOpenDuration.msecs;
@@ -329,6 +339,36 @@ unittest {
     auto optimal = optimalHallRequests(id, hallreqs, cabReqs, states, peers);
     assert(optimal[0][CallType.hallUp]);
 }
+
+unittest {
+    LocalElevatorState[ubyte] states = [
+        1 : LocalElevatorState(ElevatorBehaviour.moving,    ElevatorError.none, 1, Dirn.up  ),
+        2 : LocalElevatorState(ElevatorBehaviour.idle,      ElevatorError.none, 1, Dirn.stop),
+        3 : LocalElevatorState(ElevatorBehaviour.idle,      ElevatorError.none, 1, Dirn.stop),
+    ];
+
+    bool[2][] hallreqs = [
+        [true,  false],
+        [false, false],
+        [false, false],
+        [false, true],
+    ];
+    
+    bool[][ubyte] cabReqs = [
+        1 : [0, 0, 0, 0].to!(bool[]),
+        2 : [0, 0, 0, 0].to!(bool[]),
+        3 : [0, 0, 0, 0].to!(bool[]),
+    ];
+
+    ubyte[] peers = [1, 2, 3];
+
+    ubyte id = 1;
+
+    assert(optimalHallRequests(1, hallreqs, cabReqs, states, peers) == [[0,0], [0,0], [0,0], [0,1]].to!(bool[2][]));
+    assert(optimalHallRequests(2, hallreqs, cabReqs, states, peers) == [[1,0], [0,0], [0,0], [0,0]].to!(bool[2][]));
+    assert(optimalHallRequests(3, hallreqs, cabReqs, states, peers) == [[0,0], [0,0], [0,0], [0,0]].to!(bool[2][]));
+}
+
 
 
 
