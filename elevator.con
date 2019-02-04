@@ -15,7 +15,7 @@ elevator.con
 
 --feeds_elevatorStates_port                 16568
 --feeds_elevatorStates_bufSize              1024
---feeds_elevatorStates_minPeriod            1000
+--feeds_elevatorStates_minPeriod            100
 
 --feeds_requestConsensusCab_port            16569
 --feeds_requestConsensusHall_port           16570
