@@ -5,14 +5,12 @@ import std.string;
 import std.traits;
 
 
-import elevio.elev_types : ElevatorType;
 import fns.elevator_state : ClearRequestType;
 
 struct Config {
     ubyte               id                                              = 1;
     int                 numFloors                                       = 4;
 
-    ElevatorType        elevio_elev_elevtype                            = ElevatorType.simulation;
     string              elevio_elev_ip                                  = "localhost";
     ushort              elevio_elev_port                                = 15657;
 

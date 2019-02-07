@@ -3,7 +3,6 @@ elevator.con
 --id                                        1
 --numFloors                                 4
 
---elevio_elev_elevtype                      simulation
 --elevio_elev_ip                            localhost
 --elevio_elev_port                          15657
 
