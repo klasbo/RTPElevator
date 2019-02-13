@@ -50,6 +50,7 @@ struct Obstruction {
 
 
 void thr(){
+    elevio_init();
 
     bool[][]    call    = new bool[][](cfg.numFloors, CallType.max+1);
     int         floor   = -1;
