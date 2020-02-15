@@ -26,27 +26,28 @@ void merge(
     void delegate() onActive,
     void delegate() onInactive
 ){
+    ubyte[] appendUniq(ubyte[] a, ubyte b){
+        return (a ~ b).sort().uniq.array;
+    }
+
+    Req assumeRemote(Req local, Req remote){
+        final switch(remote.state) with(ReqState){
+        case unknown:       return local;
+        case inactive:      return Req(inactive,    []);
+        case pendingAck:    return Req(pendingAck,  appendUniq(remote.ackdBy, localId));
+        case active:        return Req(active,      appendUniq(remote.ackdBy, localId));
+        }
+    }
+
     final switch(local.state) with(ReqState){
     case unknown:
         // Local state 'unknown':
         //      Assume remote state (as long as it too is not unknown)
+        //      (Old states from localID may still live on the network, ignore these)
         if(remoteId != localId){
-            final switch(remote.state){
-            case unknown:
-                break;
-            case inactive:
-                local.state = inactive;
-                local.ackdBy.destroy;
-                break;
-            case pendingAck:
-                local.state = pendingAck;
-                local.ackdBy = remote.ackdBy ~ [localId];
-                break;
-            case active:
-                local.state = active;
-                local.ackdBy = remote.ackdBy ~ [localId];
+            local = assumeRemote(local, remote);
+            if(local.state == active){
                 onActive();
-                break;
             }
         }
         break;
@@ -55,15 +56,10 @@ void merge(
         // Local state 'inactive':
         //      Move to pendingAck if remote says so
         final switch(remote.state){
-        case unknown:
-            break;
-        case inactive:
-            break;
         case pendingAck:
-            local.state = pendingAck;
-            local.ackdBy = remote.ackdBy ~ [localId];
+            local = assumeRemote(local, remote);
             break;
-        case active:
+        case unknown, inactive, active:
             break;
         }
         break;
@@ -72,12 +68,10 @@ void merge(
         // Local state 'pendingAck':
         //      Move to active if all have ackd, or remote says all have ackd
         final switch(remote.state){
-        case unknown:
-            break;
-        case inactive:
+        case unknown, inactive:
             break;
         case pendingAck:
-            local.ackdBy ~= remote.ackdBy ~ [localId];
+            local = assumeRemote(local, remote);
             // (technically "if all or more have ackd", in case of lost peers)
             if(setDifference(peers, local.ackdBy.sort()).empty){
                 local.state = active;
@@ -85,8 +79,7 @@ void merge(
             }
             break;
         case active:
-            local.state = active;
-            local.ackdBy ~= remote.ackdBy ~ [localId];
+            local = assumeRemote(local, remote);
             onActive();
             break;
         }
@@ -95,23 +88,20 @@ void merge(
     case active:
         // Local state 'active':
         //      Move to inactive if remote says so
+        //      Append peers if remote also active
         final switch(remote.state){
-        case unknown:
+        case unknown, pendingAck:
             break;
         case inactive:
-            local.state = inactive;
-            local.ackdBy.destroy;
+            local = assumeRemote(local, remote);
             onInactive();
             break;
-        case pendingAck:
-            break;
         case active:
-            local.ackdBy ~= remote.ackdBy ~ [localId];
+            local = assumeRemote(local, remote);
             break;
         }
         break;
     }
-    local.ackdBy = local.ackdBy.sort().uniq.array;
 }
 
 void activate(ref Req local, ubyte localId){
